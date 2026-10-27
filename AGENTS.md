@@ -1,10 +1,14 @@
 # AGENTS.md
 
-本文件是 AI 编码代理的操作性约束。设计目标、架构、API 契约、里程碑见 `PROMPT.md`，此处不重复。
+本文件是 AI 编码代理的操作性约束。设计目标、架构、API 契约、里程碑见 [PROMPT.md](PROMPT.md)，此处不重复。
 
 ## 仓库落位
 
 新增代码必须落入既有层级：Rust 侧 `src-tauri/src/{core,sources,parsers,anki,platform,bridge}`；前端 `src/windows/{popup,manager,settings}` 与 `src/lib`；扩展 `extension/entrypoints`。不得在根目录随意新建目录。
+
+## 前端
+
+前端设计须参考 [DESIGN.md](DESIGN.md)。
 
 ## 常用命令
 
