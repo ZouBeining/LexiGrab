@@ -85,9 +85,10 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `toml` | 0.8.19 | MIT OR Apache-2.0 | 配置 |
 | `thiserror` | 2.0.11 | MIT OR Apache-2.0 | 错误类型 |
 | `tokio` | 1.43.0 | MIT | 异步运行时 |
-| `reqwest` | 0.13.0 | MIT OR Apache-2.0 | 远程词典与 AnkiConnect |
+| `reqwest` | 0.13.0 | MIT OR Apache-2.0 | 远程词典、AnkiConnect、选择器、LLM |
 | `ammonia` | 4.0.0 | MIT OR Apache-2.0 | HTML 清洗 |
 | `lol_html` | 2.6.0 | BSD-3-Clause | 资源路径改写 |
+| `scraper` | 0.24.0 | ISC | 从释义 HTML 提取候选义项 |
 | `uuid` | 1.17.0 | MIT OR Apache-2.0 | ID 生成 |
 | `mime_guess` | 2.0.4 | MIT | 资源 MIME |
 | `url` | 2.5.2 | MIT OR Apache-2.0 | URL |
@@ -131,7 +132,11 @@ libmdx 不在 crates.io，必须使用 git 依赖并固定 rev。其 `Cargo.toml
 | --- | --- | --- |
 | AnkiConnect | `http://127.0.0.1:8765` | 用户安装插件后提供 |
 | 本地桥接 | `http://127.0.0.1:12787` | 桌面端内置，扩展访问 |
+| JEV-like 选择器 | `http://127.0.0.1:8787/v1/select` | 可选，默认关闭；只允许回环 |
+| LLM | `http://127.0.0.1:11434/v1/chat/completions` | 可选，OpenAI-compatible；默认关闭 |
 | 远程词典 | 用户配置 | 仅 http/https，超时默认 3000ms |
+
+选择器与 LLM 都不引入专用 SDK，统一用 `reqwest` 调 HTTP。API key 只从环境变量读取，不写入配置或前端。
 
 不接入任何第三方分析、崩溃上报、CDN、远程字体或云配置服务。
 
@@ -147,6 +152,8 @@ libmdx 不在 crates.io，必须使用 git 依赖并固定 rev。其 `Cargo.toml
 | 字体包 | 不打包 Inter/Geist；使用系统字体栈 |
 | HTTP 封装 | 前端不请求远程服务；一律经 Tauri Command 或桥接 |
 | Anki 客户端 | 不引入第三方 Anki 库；直接实现 AnkiConnect 契约 |
+| LLM SDK | 不引入 OpenAI/Anthropic SDK；直接调 OpenAI-compatible HTTP |
+| 向量数据库 | 不引入；语境选择由外部 JEV-like 服务完成 |
 | 测试浏览器 | 不做 Playwright E2E；手工矩阵 + 单元测试 |
 
 ## 9. 升级规则
