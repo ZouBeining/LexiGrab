@@ -4,7 +4,7 @@ title: 技术风险验证
 depends_on: []
 exit_gate: Windows 上热键、选区捕获、非激活弹窗三项同时成立
 estimate: 5-8 人日
-status: planned
+status: done
 ---
 
 # M0 技术风险验证
