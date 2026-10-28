@@ -16,6 +16,9 @@ coverage/
 playwright-report/
 test-results/
 
+# ---------- 本地联调临时目录 ----------
+.smoke/
+
 
 # ---------- Node.js ----------
 

@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/*
+ * 语义 token 契约见 docs/FRONTEND_GUIDELINES.md 第 2 节。
+ * 所有色值来自 .agents/design/{figma,apple,cursor}.md 的 colors front matter，
+ * 不在此处自造品牌色。dangery/warning 统一使用 Cursor 的语义色，保证三套主题一致。
+ */
+:root,
+[data-theme="figma"] {
+  --lg-canvas: #ffffff;
+  --lg-canvas-soft: #f7f7f5;
+  --lg-ink: #000000;
+  --lg-ink-muted: #7a7a7a;
+  --lg-hairline: #e6e6e6;
+  --lg-accent: #000000;
+  --lg-on-accent: #ffffff;
+  --lg-block-1: #dceeb1;
+  --lg-block-2: #c5b0f4;
+  --lg-block-3: #f4ecd6;
+  --lg-success: #1ea64a;
+  --lg-danger: #cf2d56;
+  --lg-warning: #c08532;
+  --lg-overlay: #000000;
+}
+
+[data-theme="apple"] {
+  --lg-canvas: #ffffff;
+  --lg-canvas-soft: #f5f5f7;
+  --lg-ink: #1d1d1f;
+  --lg-ink-muted: #7a7a7a;
+  --lg-hairline: #e0e0e0;
+  --lg-accent: #0066cc;
+  --lg-on-accent: #ffffff;
+  --lg-block-1: #f5f5f7;
+  --lg-block-2: #fafafc;
+  --lg-block-3: #f0f0f0;
+  --lg-success: #1ea64a;
+  --lg-danger: #cf2d56;
+  --lg-warning: #c08532;
+  --lg-overlay: #000000;
+}
+
+[data-theme="cursor"] {
+  --lg-canvas: #f7f7f4;
+  --lg-canvas-soft: #fafaf7;
+  --lg-ink: #26251e;
+  --lg-ink-muted: #807d72;
+  --lg-hairline: #e6e5e0;
+  --lg-accent: #f54e00;
+  --lg-on-accent: #ffffff;
+  --lg-block-1: #fafaf7;
+  --lg-block-2: #ffffff;
+  --lg-block-3: #e6e5e0;
+  --lg-success: #1f8a65;
+  --lg-danger: #cf2d56;
+  --lg-warning: #c08532;
+  --lg-overlay: #000000;
+}
+
+@theme {
+  --color-canvas: var(--lg-canvas);
+  --color-canvas-soft: var(--lg-canvas-soft);
+  --color-ink: var(--lg-ink);
+  --color-ink-muted: var(--lg-ink-muted);
+  --color-hairline: var(--lg-hairline);
+  --color-accent: var(--lg-accent);
+  --color-on-accent: var(--lg-on-accent);
+  --color-block-1: var(--lg-block-1);
+  --color-block-2: var(--lg-block-2);
+  --color-block-3: var(--lg-block-3);
+  --color-success: var(--lg-success);
+  --color-danger: var(--lg-danger);
+  --color-warning: var(--lg-warning);
+  --color-overlay: var(--lg-overlay);
+
+  --font-sans:
+    Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--lg-canvas);
+    color: var(--lg-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background-color: var(--lg-block-1);
+    color: var(--lg-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--lg-accent);
+    outline-offset: 1px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
