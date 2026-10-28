@@ -94,7 +94,7 @@ pub enum ResponseParserConfig {
 
 ```toml
 [meta]
-schema_version = 1
+schema_version = 2
 
 [general]
 hotkey = "CmdOrCtrl+Shift+D"
@@ -109,7 +109,7 @@ endpoint = "http://localhost:8765"
 deck = "Default"
 model = "Basic"
 tags = ["global-dict"]
-allow_duplicate = false
+duplicate_policy = "warn"         # warn | allow
 field_map = { word = "Word", definition = "Definition", sentence = "Sentence", source = "Source" }
 
 [bridge]
@@ -121,6 +121,25 @@ token = "<32-byte hex>"
 ttl_hours = 24
 negative_ttl_minutes = 5
 
+[sense]
+enabled = false
+selector_endpoint = "http://127.0.0.1:8787/v1/select"
+selector_timeout_ms = 800
+selector_allow_remote = false
+low_confidence = 0.55
+high_confidence = 0.72
+max_senses = 20
+
+[llm]
+enabled = false
+endpoint = "http://127.0.0.1:11434/v1/chat/completions"
+model = ""
+api_key_env = "LEXIGRAB_LLM_API_KEY"
+timeout_ms = 15000
+max_tokens = 320
+allow_remote = false
+cache_ttl_hours = 168
+
 [[sources]]
 id = "local-00000001"
 name = "Mini"
@@ -129,6 +148,12 @@ enabled = true
 priority = 10
 paths = ["tests/fixtures/mini.mdx"]
 ```
+
+迁移规则：
+
+- `schema_version = 1` 的 `anki.allow_duplicate = false` 迁移为 `duplicate_policy = "warn"`，`true` 迁移为 `"allow"`。
+- 新增 `[sense]` / `[llm]` 缺省为关闭；`api_key` 不写入配置，只读环境变量。
+- 配置保存前校验阈值 `0 < low < high <= 1`、端点 scheme、超时范围。
 
 保存规则：
 
@@ -162,6 +187,85 @@ interface QueryMeta {
 
 只保留最近 8 个 query_id。`lookup` 返回 `Entry[]`，元数据由 `get_query_meta` 单独读取。
 
+### 2.6 语境辅助模型
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct SenseCandidate {
+    pub id: String,                 // e{entry_index}-s{sense_index}
+    pub entry_index: usize,
+    pub source_name: String,
+    pub headword: String,
+    pub part_of_speech: Option<String>,
+    pub definition_text: String,
+    pub definition_html: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SenseStatus {
+    Disabled,
+    NoContext,
+    Selected,
+    Ambiguous,
+    LowConfidence,
+    Unavailable,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SenseResolution {
+    pub query_id: String,
+    pub headword: String,
+    pub status: SenseStatus,
+    pub selected_sense_id: Option<String>,
+    pub confidence: Option<f32>,    // 0..1，选择器自评
+    pub selector_model: Option<String>,
+    pub ai: Option<AiDefinition>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AiDefinition {
+    pub definition_text: String,
+    pub part_of_speech: Option<String>,
+    pub model: String,
+    pub confidence: Option<f32>,
+    pub based_on_sense_id: Option<String>,
+    pub generated_at: i64,
+}
+```
+
+规则：
+
+- `SenseCandidate` 从 `Entry.definition_html` 提取；无法拆分的条目整体作为一个候选。
+- `selected_sense_id` 必须属于本次候选集合。
+- `SenseResolution` 不改变 `Entry[]`；UI 同时保留全部义项。
+- AI 定义是纯文本，不包含 HTML；写入 Anki 时转义并包一层 `<div>`。
+- `confidence` 是模型自评，不是校准后的真实概率；阈值可配置。
+
+### 2.7 选区上下文
+
+M0 的 `SelectionContext` 只有文本/锚点/应用信息。语境辅助需要原句，M2 扩展为：
+
+```rust
+pub struct SelectionContext {
+    pub text: String,
+    pub sentence: Option<String>,   // 新增；桌面 UIA 或扩展桥接提供
+    pub url: Option<String>,        // 扩展提供；桌面为空
+    pub title: Option<String>,
+    pub domain: Option<String>,
+    pub anchor: Option<ScreenAnchor>,
+    pub foreground_hwnd: i64,
+    pub app_name: String,
+    pub method: CaptureMethod,
+    pub captured_at_ms: i64,
+    pub elapsed_ms: f64,
+}
+```
+
+新增字段必须向后兼容：Rust serde 用 `#[serde(default)]`，TS 老代码可忽略。
+
 ## 3. SQLite 缓存
 
 位置：`%LOCALAPPDATA%\LexiGrab\cache.db`。
@@ -178,10 +282,35 @@ CREATE TABLE IF NOT EXISTS lookup_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_lookup_cache_expires
   ON lookup_cache(expires_at);
+
+CREATE TABLE IF NOT EXISTS saved_cards (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  word            TEXT NOT NULL,
+  sentence_key    TEXT NOT NULL,     -- uuid v5(normalized sentence)
+  definition_key  TEXT NOT NULL,     -- uuid v5(normalized definition text)
+  source          TEXT NOT NULL,
+  note_id         INTEGER,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_saved_cards_context
+  ON saved_cards(word, sentence_key, definition_key);
+
+CREATE TABLE IF NOT EXISTS sense_cache (
+  context_key     TEXT PRIMARY KEY,   -- uuid v5(word|sentence|senses|model)
+  resolution_json TEXT NOT NULL,
+  created_at      INTEGER NOT NULL,
+  expires_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
+  ON sense_cache(expires_at);
 ```
 
 规则：
 
+- `saved_cards` 只用于“同词同句同释义”提示与本地历史，不参与 Anki 唯一性。
+- 指纹：NFKC + 小写 + 压缩空白后，用 uuid v5 生成；释义取纯文本。
+- `sense_cache` 缓存选择器/LLM 结果，TTL 7 天；不缓存失败。
+- 清除“词典缓存”不默认清除 `saved_cards`（历史）与 `sense_cache`；设置页分别提供清理。
 - `PRAGMA journal_mode = WAL`、`busy_timeout = 2000`、`user_version` 记录 schema 版本。
 - 查询键：trim + NFKC + 小写。
 - 正结果 TTL 24h；空结果 TTL 5 分钟；错误不缓存。
@@ -199,7 +328,8 @@ CREATE INDEX IF NOT EXISTS idx_lookup_cache_expires
 | `add_source` | `config` | `SourceConfig` | 保存并异步打开 |
 | `update_source` | `id`, `config` | `SourceConfig` | 保存并重载 |
 | `remove_source` | `id` | `void` | 关闭 worker 并删除配置 |
-| `export_to_anki` | `payload` | `{ note_id: number }` | 使用全局 Anki 设置 |
+| `export_to_anki` | `payload` | `{ note_id, exact_context_seen }` | 始终允许重复；提示只用于 UI |
+| `check_card_context` | `payload` | `{ seen, note_id?, created_at? }` | 保存前同语境检查 |
 | `get_anki_decks` | 无 | `string[]` | AnkiConnect |
 | `get_anki_models` | 无 | `{ name, fields }[]` | AnkiConnect |
 | `get_settings` | 无 | `Settings` | 含令牌，UI 遮罩 |
@@ -214,6 +344,10 @@ CREATE INDEX IF NOT EXISTS idx_lookup_cache_expires
 | `probe_anki` | 无 | `AnkiStatus` | 只读探测 |
 | `open_config_dir` | 无 | `void` | 打开配置目录 |
 | `get_query_meta` | `query_id` | `QueryMeta \| null` | 缓存/远程标记 |
+| `get_sense_resolution` | `query_id` | `SenseResolution \| null` | 语境推荐结果 |
+| `test_sense_selector` | `word`, `sentence` | `SenseResolution` | 设置页测试，不写缓存 |
+| `test_llm` | `word`, `sentence`, `senses` | `AiDefinition` | 设置页测试，不写缓存 |
+| `clear_sense_cache` | 无 | `{ removed }` | 清理语境缓存 |
 | `get_bridge_status` | 无 | `BridgeStatus` | 桥接状态 |
 | `regenerate_bridge_token` | 无 | `string` | 轮换令牌 |
 
@@ -241,6 +375,15 @@ ANKI_UNREACHABLE
 ANKI_API_ERROR
 ANKI_DUPLICATE
 ANKI_FIELD_MISSING
+SENSE_DISABLED
+SENSE_NO_CONTEXT
+SENSE_SELECTOR_FAILED
+SENSE_LOW_CONFIDENCE
+LLM_DISABLED
+LLM_REMOTE_BLOCKED
+LLM_TIMEOUT
+LLM_BAD_RESPONSE
+CARD_CONTEXT_SEEN
 HOTKEY_CONFLICT
 WINDOW_NOT_FOUND
 RESOURCE_NOT_FOUND
@@ -257,6 +400,7 @@ INTERNAL
 | --- | --- |
 | `lookup://remote-result` | `{ query_id, source_id, source_name, entries, cached, elapsed_ms }` |
 | `lookup://remote-error` | `{ query_id, source_id, code, message }` |
+| `lookup://sense-result` | `SenseResolution` |
 | `dict://index-progress` | `{ source_id, path, phase, entry_count?, message? }` |
 | `popup://selection` | `SelectionContext` |
 | `runtime://hotkey-error` | `{ message }` |
@@ -273,8 +417,9 @@ INTERNAL
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/v1/health` | 是 | `{ ok, app, version, api_version }` |
-| POST | `/v1/selection` | 是 | 划词查询 |
-| POST | `/v1/anki` | 是 | 制卡 |
+| POST | `/v1/selection` | 是 | 划词查询；返回 `sense_available` |
+| GET | `/v1/sense/{query_id}` | 是 | 语境推荐；完成前 202 |
+| POST | `/v1/anki` | 是 | 制卡；返回 `exact_context_seen` |
 | OPTIONS | 以上 | 否 | CORS 预检 |
 
 ### 5.2 请求/响应
@@ -297,12 +442,21 @@ INTERNAL
   "entries": [],
   "source_names": ["CC-CEDICT"],
   "partial": false,
+  "sense_available": true,
   "elapsed_ms": 42
 }
 ```
 
 - `lookup_collect_all` 等待所有启用源，截止 3.5s，返回已收集结果与 `partial`。
 - 结果按 `max_entries_per_source` 与 `max_entries_total` 截断。
+- `sense_available` 为真时，扩展可轮询 `/v1/sense/{query_id}`；不阻塞首屏。
+
+**GET /v1/sense/{query_id}**
+
+- 已完成：200 + `SenseResolution`。
+- 进行中：202 + `{ "status": "pending" }`。
+- 未知/过期：404。
+- 未启用语境辅助：200 + `{ "status": "disabled" }`。
 
 **POST /v1/anki**
 
@@ -315,7 +469,7 @@ INTERNAL
 }
 ```
 
-返回 `{ "note_id": 12345 }`。定义 HTML 上限 512KB，服务端再次清洗并剥离本地媒体。
+返回 `{ "note_id": 12345, "exact_context_seen": false }`。定义 HTML 上限 512KB，服务端再次清洗并剥离本地媒体。`exact_context_seen` 只提示同词同句同释义，不影响写入。
 
 ### 5.3 鉴权与安全
 
@@ -348,13 +502,16 @@ INTERNAL
         "Source": "..."
       },
       "tags": ["global-dict"],
-      "options": { "allowDuplicate": false }
+      "options": { "allowDuplicate": true }
     }
   }
 }
 ```
 
 - 连接超时 1.5s，总超时 3s，不自动重试。
+- **始终发送 `allowDuplicate: true`**；同一单词在不同语境/义项下必须可建多张卡。
+- 应用层用 `saved_cards` 检查“同词同句同释义”指纹；命中时按 `duplicate_policy` 提示或静默保存，绝不阻断不同语境。
+- AI 释义生成的卡片追加标签 `ai-generated`，`Source` 写 `AI · <model>`；词典义项仍写来源名。
 - 连接失败 → `ANKI_UNREACHABLE`，文案“Anki 未运行或 AnkiConnect 未安装”。
 - HTTP 200 + `error` 非空：包含 `duplicate` → `ANKI_DUPLICATE`，否则 `ANKI_API_ERROR`。
 - 导出前用 `modelFieldNames` 校验四个字段存在。
@@ -411,6 +568,119 @@ function parse(ctx) {
 - 编译/运行/超时/内存/结构错误分别映射，不中断查询。
 - 脚本是本地代码，UI 必须提示只运行可信脚本。
 
+### 7.4 义项提取
+
+`SenseExtractor` 在 `Entry` 上工作，不新增字典格式依赖：
+
+1. 用 `scraper`（ISC）解析 `definition_html`。
+2. 优先取顶层 `ol > li` / `ul > li`；没有列表时取顶层 `p` 分组；仍无法拆分则整条 Entry 作为一个候选。
+3. 每个候选生成 `e{entry_index}-s{n}`，保留该段 HTML 与去标签文本；空文本或长度 <2 的候选丢弃。
+4. 最多 20 个候选；同一 Entry 内去重。
+5. 词性从 `<span class="pos">`、`<i>` 前缀或括号缩写中尽力提取，取不到为 `null`。
+6. 抽取失败不报错，退化为整条 Entry 单候选。
+7. 该方法对结构化词典有效，对整段 HTML 词典只能整条推荐；这是已知限制，不假装能精确切分所有 MDX。
+
+### 7.5 JEV-like 选择器契约
+
+配置：`sense.selector_endpoint`，默认 `http://127.0.0.1:8787/v1/select`。
+
+请求：
+
+```json
+{
+  "word": "bank",
+  "sentence": "He sat on the bank of the river.",
+  "locale": "en",
+  "senses": [
+    { "id": "e0-s1", "part_of_speech": "noun", "definition": "financial institution" },
+    { "id": "e0-s2", "part_of_speech": "noun", "definition": "sloping land beside water" }
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "selected_id": "e0-s2",
+  "confidence": 0.81,
+  "distribution": { "e0-s1": 0.19, "e0-s2": 0.81 },
+  "model": "jev-like-2026-10",
+  "reason": "river context"
+}
+```
+
+规则：
+
+- `selected_id` 必须属于请求候选；否则按低置信度处理。
+- `confidence` 必须在 0–1；缺失按 0。
+- 只接受 HTTP 200 + JSON；超时 800ms；不重试。
+- 选择器失败 → `Unavailable`，不自动调用 LLM；用户可手动点“用 AI 解释”。
+- 默认只允许回环地址；`selector_allow_remote = true` 才允许远程，并在 UI 二次确认。
+- 置信度是模型自评；JEV-like 模型可能过度自信，阈值可调，界面不把它显示成客观概率。
+
+### 7.6 LLM 兜底契约
+
+触发条件：
+
+- `sense.enabled = true` 且 `llm.enabled = true`；
+- 有原句；
+- 选择器状态为 `LowConfidence` 或没有命中候选；
+- 用户未关闭“AI 兜底”。
+
+请求使用 OpenAI-compatible `POST {llm.endpoint}`：
+
+```json
+{
+  "model": "<llm.model>",
+  "temperature": 0,
+  "max_tokens": 320,
+  "messages": [
+    { "role": "system", "content": "<lexicographer prompt>" },
+    { "role": "user", "content": "{word, sentence, senses, locale}" }
+  ]
+}
+```
+
+要求模型只返回 JSON：
+
+```json
+{
+  "definition": "the land alongside a river",
+  "part_of_speech": "noun",
+  "confidence": 0.7,
+  "explanation": "the sentence mentions the river"
+}
+```
+
+规则：
+
+- 解析 `choices[0].message.content` 的 JSON；坏 JSON → `LLM_BAD_RESPONSE`，不生成半截文本。
+- `definition` 是纯文本；禁止 HTML；长度 ≤600 字符。
+- 不把 LLM 输出写回 `Entry`，只作为 `AiDefinition` 候选。
+- 同一查询最多调用 1 次；超时 15s；不流式；不重试。
+- 结果写入 `sense_cache`，TTL 7 天；key 含 model 与 prompt version。
+- 远程端点（非 loopback）必须 `allow_remote = true`；否则 `LLM_REMOTE_BLOCKED`，不发请求。
+- API key 只从 `api_key_env` 指定的环境变量读取；不写入配置、不写日志。
+- 用户点击“使用此释义”后，卡片 `Source` 写 `AI · <model>`，并加 `ai-generated` 标签。
+
+### 7.7 状态与阈值
+
+| 条件 | 状态 | UI |
+| --- | --- | --- |
+| `sense.enabled=false` | `disabled` | 不显示推荐，只显示全部义项 |
+| 没有原句 | `no_context` | 不调用选择器，提示“缺少原句” |
+| 选择器不可达/超时 | `unavailable` | 辅助区淡提示，可手动用 AI |
+| `confidence >= high_confidence` | `selected` | 高亮推荐义项，保存默认使用 |
+| `low < confidence < high` | `ambiguous` | 高亮 + “建议确认”，不自动改选择 |
+| `confidence <= low` 或无匹配 | `low_confidence` | 显示“可能不在词典义项中”，LLM 兜底 |
+| LLM 成功 | `low_confidence` + `ai` | 显示 AI 卡，默认不选中 |
+| LLM 失败/未启用 | `low_confidence` | 保留全部义项，提示手动判断 |
+
+- 用户手动切换义项后，以用户选择为准；选择器结果不覆盖。
+- 用户选择 AI 释义后，保存使用 AI 文本；仍可编辑。
+- 阈值默认 `low=0.55`、`high=0.72`，只允许 `0 < low < high <= 1`。
+
 ## 8. 存储与路径
 
 | 内容 | 路径 |
@@ -444,6 +714,13 @@ function parse(ctx) {
 | 负缓存 | 5min | 1–60min |
 | 词典打开超时 | 15s | 固定 |
 | 查询超时 | 500ms | 固定 |
+| 候选义项 | 20 | 每个 Entry/查询 |
+| 选择器超时 | 800ms | 200–3000ms |
+| 低置信度阈值 | 0.55 | 0–1，且低于 high |
+| 高置信度阈值 | 0.72 | 0–1 |
+| LLM 超时 | 15000ms | 1000–60000ms |
+| LLM 输出 | 320 tokens | ≤600 字符定义 |
+| 语境缓存 TTL | 7 天 | 1–720h |
 
 ## 10. 边缘情况
 
@@ -458,8 +735,15 @@ function parse(ctx) {
 | 缓存损坏 | 重建，不阻断查询 |
 | 桥接端口占用 | 状态 failed，设置页提示改端口 |
 | 令牌轮换 | 旧令牌立即 401，扩展需重新配对 |
-| Anki 重复 | 提示，不自动改原句 |
+| Anki 重复 | 不同语境/义项允许；仅同词同句同释义提示 |
 | 字段缺失 | 导出前拦截，指向设置 |
+| 选择器返回未知 id | 按低置信度处理，不选中 |
+| 选择器不可达 | `unavailable`，不自动调 LLM |
+| LLM 坏 JSON | 丢弃，保留词典义项 |
+| LLM 远程未允许 | `LLM_REMOTE_BLOCKED`，不发请求 |
+| 同词不同句 | 正常建卡，不提示重复 |
+| 同词同句不同义项 | 正常建卡，指纹不同 |
+| 同词同句同释义 | 提示一次，用户可仍然保存 |
 | 配置损坏 | 备份并用默认配置启动 |
 | 单实例重复启动 | 显示已有管理器，退出新进程 |
 
@@ -472,6 +756,8 @@ function parse(ctx) {
 - 网络：远程只允许 http/https；鉴权头不随跨主机重定向发送；不记录敏感值。
 - 依赖：AGPL-3.0 兼容；`cargo deny` 与前端许可证检查。
 - 隐私：无遥测；缓存与日志留在本机；日志不记录选中文本。
+- 语境辅助：选择器默认回环；LLM 默认关闭且只允许回环，远程需显式允许；API key 只读环境变量；短语/原句不写日志。
+- AI 输出：纯文本、标注模型、用户确认后才写卡；不得冒充词典原文。
 
 ## 12. 测试缝
 
