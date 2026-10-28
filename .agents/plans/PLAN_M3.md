@@ -26,11 +26,13 @@ M3 交付三件事：只监听回环地址的 HTTP 桥接、WXT/Firefox 扩展�
 **做**
 
 - 桥接：`127.0.0.1:12787`，令牌、Origin、CORS、限流、请求体上限。
-- `GET /v1/health`、`POST /v1/selection`、`POST /v1/anki`。
+- `GET /v1/health`、`POST /v1/selection`、`GET /v1/sense/{query_id}`、`POST /v1/anki`。
 - 桌面端“浏览器扩展”设置分区：启用、端口、令牌、状态、配对步骤。
 - `lookup_collect_all` 的本地版本（3.5s 截止）。
 - WXT 扩展工程、manifest、background、content、options。
 - 选区捕获、句子提取、页面元数据、浮动按钮、结果气泡、保存。
+- 语境辅助展示：轮询 `sense_available`，显示推荐义项/低置信度 AI 释义（M4 提供数据）。
+- 同词多卡：扩展连续保存不因首字段相同被阻断；同语境显示提示。
 - `.xpi` 构建、安装、重启持久化验证。
 - 桥接与扩展自动化测试、手工端到端。
 
@@ -76,8 +78,9 @@ M3 开始前读 `references/ODH`（MIT，commit `ce5e7da`）：
 4. CORS 头加到所有响应，包括 401/403/413/429；预检不参与限流。
 5. 请求体 1MB、20 次/秒、突发 40、处理超时 10s。
 6. 实现 `lookup_collect_all` 本地版本：并发本地源，3.5s 截止，返回 `partial`。
-7. 生命周期：随配置启动/停止；状态事件；`get_bridge_status`、`regenerate_bridge_token`。
-8. 记录最近成功请求时间，用于设置页“已连接”。
+7. 实现 `GET /v1/sense/{query_id}`：已完成 200，进行中 202，未知 404；不阻塞 selection 首屏。
+8. 生命周期：随配置启动/停止；状态事件；`get_bridge_status`、`regenerate_bridge_token`。
+9. 记录最近成功请求时间，用于设置页“已连接”。
 
 **验收**：无令牌 401；非 moz-extension Origin 403；CORS 预检正确；限流 429；成功查询与制卡；桥接测试不启真实端口时用 oneshot。
 
@@ -114,10 +117,11 @@ M3 开始前读 `references/ODH`（MIT，commit `ce5e7da`）：
 - content → background 消息；background fetch 桥接，AbortController 5s。
 - 错误映射：`NOT_CONFIGURED`、`DESKTOP_OFFLINE`、`AUTH_FAILED`、`ORIGIN_REJECTED`、`TIMEOUT`、`SERVER_ERROR`、`INVALID_RESPONSE`。
 - 结果最多 3 条，首条展开；DOMPurify 二次清洗；来源显示域名。
-- 保存：`POST /v1/anki`，成功按钮变“已保存”，2s 关闭。
+- 若 `sense_available`，轮询 `/v1/sense/{query_id}`（1s 间隔、最多 5 次）：显示推荐义项、置信度或 AI 卡；失败不阻塞释义。
+- 保存：`POST /v1/anki`，成功显示“已保存”与“再存一张”；**不因同词阻断**，仅当 `exact_context_seen` 显示提示。
 - 不把令牌、完整响应体写入页面或 console。
 
-**验收**：Firefox 中查询/保存成功；401 与离线有不同提示；气泡不破坏页面布局。
+**验收**：Firefox 中查询/保存成功；401 与离线有不同提示；同词连续保存不阻断；sense 轮询在 disabled/pending 时不破坏气泡。
 
 ### T3.5 选项页与配对
 
@@ -147,9 +151,9 @@ pnpm -C extension package:firefox
 
 ### T3.7 测试
 
-- Rust：oneshot 测鉴权、Origin、CORS、参数、413、429、成功/部分结果/重复/Anki 不可用；真实端口测试绑定回环。
-- 扩展：句子提取 happy-dom 用例、bridge 错误映射、气泡四状态。
-- 手工：Wikipedia、新闻、中文页面各 3 次；令牌轮换、端口冲突、桌面端关闭、Anki 关闭。
+- Rust：oneshot 测鉴权、Origin、CORS、参数、413、429、成功/部分结果/同词多卡/Anki 不可用；`/v1/sense` 的 200/202/404；真实端口测试绑定回环。
+- 扩展：句子提取 happy-dom 用例、bridge 错误映射、气泡状态、sense 轮询与 AI 展示。
+- 手工：Wikipedia、新闻、中文页面各 3 次；令牌轮换、端口冲突、桌面端关闭、Anki 关闭、同词多句保存。
 - 结果写 `.agents/notes/M3-extension-verification.md`。
 
 ## 5. 阶段决策
@@ -161,6 +165,8 @@ pnpm -C extension package:firefox
 | Origin | 只允许 `moz-extension://` 前缀；缺失 Origin 仍需令牌 |
 | 扩展 UI | Shadow DOM + Tailwind；不用页面 CSS |
 | 句子 | Intl.Segmenter 优先，标点回退；不追求完美 |
+| 语境辅助 | 扩展只展示桌面端结果；不在扩展内直连选择器/LLM |
+| 多卡片 | 扩展保存不因同词阻断；同语境提示一次 |
 | URL | 只展示，不写入 Anki |
 
 ## 6. 风险
@@ -176,6 +182,8 @@ pnpm -C extension package:firefox
 | 句子偏差 | 纯函数测试 + 站点矩阵 |
 | 未签名安装失败 | 文档给 Dev/Nightly 与临时加载 |
 | 扩展 ID 变更丢设置 | ID 固定，发布前不换 |
+| sense 轮询拖慢气泡 | 1s 间隔、最多 5 次；失败静默；首屏不等 |
+| 同词多卡被误判 | 桥接返回 exact_context_seen，仅提示 |
 
 ## 7. 提交拆分
 
@@ -187,6 +195,7 @@ test(bridge): cover auth cors limits and endpoints
 feat(extension): scaffold wxt firefox mv2 project
 feat(extension): capture selection and extract sentence
 feat(extension): add result bubble and anki save
+feat(extension): show sense hint and multi-card save
 feat(extension): add options page and token pairing
 build(extension): package unsigned xpi with web-ext
 docs(notes): record firefox install and e2e results
@@ -200,6 +209,8 @@ docs(notes): record firefox install and e2e results
 - [ ] 扩展配对成功，测试连接可用。
 - [ ] 词、原句、标题、URL、域名正确。
 - [ ] 查询/保存成功；401/离线/超时有区分。
+- [ ] `/v1/sense/{query_id}` 在未启用/进行中返回 disabled/pending，M4 接入后返回推荐/AI；扩展不阻塞首屏。
+- [ ] 同一单词连续保存多张卡不被阻断；同语境只提示。
 - [ ] `.xpi` 在 Dev/Nightly 安装并重启保留。
 - [ ] 正式版临时加载路径与限制已记录。
 - [ ] 自动化测试与手工矩阵通过，`cargo test`、typecheck、lint 全绿。
@@ -207,4 +218,4 @@ docs(notes): record firefox install and e2e results
 
 ## 9. 交接给 M4/M5
 
-M4 复用 `lookup_collect_all` 与桥接协议；启用远程源后无需改端点。M5 完成扩展设置文案、`.xpi` 文档、令牌存储安全说明。
+M4 复用 `lookup_collect_all`、`/v1/sense` 与桥接协议；启用选择器/LLM 后扩展无需改端点。M5 完成扩展设置文案、`.xpi` 文档、令牌存储安全说明。

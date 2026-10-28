@@ -28,6 +28,7 @@ M1 把业务核心做成不依赖 Tauri 的 Rust 库，用开发 CLI 驱动。�
 - `Entry`、`ResourceRef`、`SourceConfig`、`Settings`、`AnkiPayload` 的 Rust 实现。
 - libmdx 适配层、独立 worker、多文件源、查询归一化。
 - MDX HTML 清洗、资源路径改写、资源收集。
+- 义项提取基础：从 Entry HTML 切出 `SenseCandidate`，为 M4 的语境选择准备数据。
 - `LocalFileSource`、`SourceRegistry`、本地 `QueryRouter`。
 - AnkiConnect 客户端与字段映射。
 - 开发 CLI：查词、列牌组/模板、制卡、压测。
@@ -136,6 +137,7 @@ src-tauri/tests/{support,fixtures,config_tests,mdx_tests,router_tests,html_tests
 - 连接失败、API 错误、重复、字段缺失分类。
 - 导出前校验四个字段存在；HTML 转义与换行处理。
 - 空 source 写“未知来源”；空 sentence 写空字符串。
+- **始终 `allowDuplicate: true`**；同词多卡从 M1 起就是默认行为，应用层指纹提示留到 M2。
 
 **验收**：wiremock 断言请求体；连接拒绝/duplicate/字段缺失映射正确。
 
@@ -163,6 +165,17 @@ bench       --config <path> --word <word> [--iterations 100]
 - 写 `.agents/notes/M1-core-baseline.md`。
 - 若 10 万级 `find_index` 超 100ms，定位索引加载还是单次查找，给 M2 加载策略。
 
+### T1.11 义项提取基础
+
+- 引入 `scraper` 0.24.0（ISC），解析清洗后的 `definition_html`。
+- 优先取顶层 `ol/ul > li`；没有列表时取顶层 `p` 分组；仍无法拆分则整条 Entry 一个候选。
+- 生成 `SenseCandidate { id, entry_index, source_name, headword, part_of_speech, definition_text, definition_html }`。
+- 候选最多 20 个；空文本/过短丢弃；词性尽力提取，失败为 `null`。
+- 只做提取，不调用选择器/LLM；这些在 M4。
+- 测试：列表型、段落型、无结构整段、空标签、超长候选。
+
+**验收**：夹具的列表释义能拆出多个候选；无法拆分时退化为单候选且不报错。
+
 ## 4. 阶段决策
 
 | 决策 | 结论 |
@@ -172,6 +185,7 @@ bench       --config <path> --word <word> [--iterations 100]
 | 查询变体 | 原文、小写、大写、首字母大写，最多 3 条 |
 | HTML 安全 | 先改写资源，再 ammonia 清洗；脚本与事件属性一律移除 |
 | 媒体导出 | M1 不处理，M2 剥离 |
+| 义项切分 | 列表/段落启发式；无法切分时整条 Entry 一个候选，不假装精确 |
 
 ## 5. 风险
 
@@ -205,12 +219,14 @@ feat(core): add query router with three strategies
 feat(anki): add ankiconnect client and field mapping
 feat(cli): add lexigrab-dev commands
 test: add mini mdx fixtures and integration tests
+test: cover sense extraction fallbacks
 docs(notes): record m1 core baseline
 ```
 
 ## 8. 出口检查清单
 
 - [ ] 夹具可查 `hello`，资源可读，URI 已改写。
+- [ ] `SenseCandidate` 可从结构化释义切出，无法切分时单候选。
 - [ ] `source_name` 由 source 层填写。
 - [ ] 三种策略有测试，失败源不阻断。
 - [ ] Anki 四字段可写入，模板校验生效。

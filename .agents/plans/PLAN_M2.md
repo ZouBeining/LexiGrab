@@ -33,6 +33,7 @@ M2 把 M0 的窗口与 M1 的核心库接起来，交付可日常使用的 Windo
 - 首次启动引导、AnkiConnect 引导。
 - 托盘、单实例、关闭到托盘。
 - 桌面端尽力而为的句子捕获。
+- 同词多卡：`saved_cards` 语境指纹、Anki 始终允许重复、同语境提示。
 - 前端测试、命令集成测试、性能测量。
 
 **不做**
@@ -100,9 +101,11 @@ src/windows/settings/{index.tsx,SettingsApp,GeneralSection,AnkiSection,HotkeyInp
 - `Ctrl+Enter` 保存，Esc 取消；保存失败保留输入。
 - 按 BACKEND_STRUCTURE §2.4、§6 组装 payload；来源去重逗号连接，空写“未知来源”。
 - 导出前再次清洗；本地媒体移除并插入占位文本。
-- 成功显示 note id，1.2s 后隐藏并恢复焦点。
+- **始终 `allowDuplicate: true`**；不同原句/义项直接保存。
+- 保存前查 `saved_cards` 同词同句同释义指纹；命中只提示，用户可“仍然保存”。
+- 成功显示 note id 后保留弹窗，提供“再存一张”“关闭”；恢复焦点只在关闭时做。
 
-**验收**：四字段正确；重复/未运行/字段缺失有明确提示；编辑后可恢复焦点。
+**验收**：四字段正确；同词不同句/不同义项可连续保存；未运行/字段缺失有明确提示；编辑后可恢复焦点。
 
 ### T2.5 管理器
 
@@ -119,7 +122,7 @@ src/windows/settings/{index.tsx,SettingsApp,GeneralSection,AnkiSection,HotkeyInp
 - 分区与字段按 [APP_FLOW](../../docs/APP_FLOW.md) §7。
 - 热键录制、保存时应用，冲突回滚且不写盘。
 - 主题三选一：figma / apple / cursor；只换 CSS 变量。
-- Anki：连接探测、牌组/模板、字段映射、标签、重复开关。
+- Anki：连接探测、牌组/模板、字段映射、标签、同词多卡策略（提示/静默）。
 - 扩展与缓存分区显示“M3/M4 提供”，不放无效控件。
 
 **验收**：热键冲突不丢旧值；主题即时生效；字段映射保存前校验。
@@ -142,11 +145,22 @@ src/windows/settings/{index.tsx,SettingsApp,GeneralSection,AnkiSection,HotkeyInp
 
 **验收**：支持应用可取到句；不支持时弹窗不被拖慢；`sentence` 为空仍可保存。
 
-### T2.9 测试与性能
+### T2.9 同词多卡与语境指纹
 
-- Rust：资源协议（合法/404/穿越/MIME/非 GET）、命令、导出媒体剥离、句子捕获失败、配置回滚、Registry 重载。
-- 前端：resource 转换、popup reducer、payload 组装、query_id 过期。
-- 手工矩阵：记事本、Chrome、空选区、无结果、制卡成功、Anki 未运行、重复、编辑、字段错误、添加词典、大词典、重启、关闭窗口、单实例。
+- 按 BACKEND_STRUCTURE §3 建 `saved_cards`；指纹用 NFKC + 小写 + 压缩空白 + uuid v5。
+- 保存前 `check_card_context`；不同原句或不同释义不提示。
+- 命中时展示“此语境已存过”，主动作“仍然保存”，次动作“换义项”。
+- 保存成功后写入 note_id；写入失败不阻断 Anki 结果。
+- 设置项 `duplicate_policy = warn | allow`，默认 warn。
+- 不在 Anki 字段中追加指纹/URL，保持四字段契约。
+
+**验收**：同一单词 3 个不同句子连续保存 3 张卡不出现阻断；同词同句同释义提示一次且可覆盖；删除/重建缓存不影响历史提示。
+
+### T2.10 测试与性能
+
+- Rust：资源协议（合法/404/穿越/MIME/非 GET）、命令、导出媒体剥离、句子捕获失败、配置回滚、Registry 重载、同语境指纹。
+- 前端：resource 转换、popup reducer、payload 组装、query_id 过期、多卡片提示。
+- 手工矩阵：记事本、Chrome、空选区、无结果、制卡成功、Anki 未运行、同词不同句、同词同句不同义项、编辑、字段错误、添加词典、大词典、重启、关闭窗口、单实例。
 - 性能：热键→可见 p95 ≤200ms；热键→首结果 p95 ≤350ms；本地查询 p95 <100ms。
 - 数据写入 `.agents/notes/M2-acceptance.md`。
 
@@ -158,6 +172,7 @@ src/windows/settings/{index.tsx,SettingsApp,GeneralSection,AnkiSection,HotkeyInp
 | 弹窗编辑 | 不新增第四窗口，popup 切换编辑态 |
 | 预创建 | 启动时创建隐藏 popup |
 | 媒体导出 | 移除 img/audio/video/source，插入占位文本 |
+| 同词多卡 | Anki `allowDuplicate: true`；应用层指纹只提示同语境 |
 | 主题 | figma 默认，apple/cursor 只换色；0.1.0 不做深色 |
 
 ## 5. 风险
@@ -171,6 +186,8 @@ src/windows/settings/{index.tsx,SettingsApp,GeneralSection,AnkiSection,HotkeyInp
 | CSP 阻断资源 | 同时放行两种 URI，DevTools 验证 |
 | 链接导航走 WebView | 统一拦截交系统浏览器 |
 | 用户误以为关窗即退出 | 首次关闭提示 + 托盘菜单 |
+| 同词多卡被误判重复 | 始终 allowDuplicate；指纹只做提示；不同语境不阻断 |
+| 指纹碰撞/漏判 | 规范化 + uuid v5；提示可覆盖；不作为唯一性约束 |
 
 ## 6. 提交拆分
 
@@ -182,8 +199,10 @@ feat(popup): implement capture to result flow
 feat(popup): implement edit mode and anki export
 feat(manager): implement local source management
 feat(settings): implement general and anki settings
+feat(core): add saved cards context fingerprint
 feat(app): add tray single instance and lifecycle
 test: cover resource handler and popup state
+test: cover same-word multi-card flow
 perf: precreate popup and measure latency
 docs(notes): record m2 acceptance results
 ```
@@ -195,7 +214,8 @@ docs(notes): record m2 acceptance results
 - [ ] MDX 图片/音频显示，Windows URI 正确。
 - [ ] 本地源增删改、启停、排序、重启保持。
 - [ ] 大词典不冻结 UI。
-- [ ] 四字段正确，重复/未运行/字段缺失有提示。
+- [ ] 四字段正确；同词不同句/不同义项可连续保存。
+- [ ] 同词同句同释义只提示一次，可覆盖；不同语境不阻断。
 - [ ] 设置热键、主题、策略、Anki 可保存并生效。
 - [ ] 托盘、单实例、关闭到托盘正确。
 - [ ] 自动化测试与手工矩阵通过。

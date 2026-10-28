@@ -1,25 +1,25 @@
 ---
 phase: M4
-title: 远程源、解析钩子与缓存
+title: 远程源、语境辅助与缓存
 depends_on: [M2, M3]
-exit_gate: 非标准 API 经 JSONPath 与脚本解析为 Entry[]，远程失败不影响本地结果
-estimate: 10-14 人日
+exit_gate: 非标准 API 可解析；JEV-like 选义项并在低置信度时生成可用的 AI 释义；远程/辅助失败不影响本地结果
+estimate: 14-18 人日
 status: planned
 ---
 
-# M4 远程源与脚本钩子
+# M4 远程源、语境辅助与缓存
 
-M4 把数据源扩展到 HTTP，完成两条解析路径、缓存、远程查询策略与管理界面。远程源失败必须静默降级。
+M4 把数据源扩展到 HTTP，完成两条解析路径、缓存、远程查询策略，并接入 JEV-like 义项选择与 LLM 兜底。远程源与语境辅助失败都必须静默降级。
 
 ## 全局依据
 
 - 数据模型、配置、桥接、解析器、缓存 schema：[BACKEND_STRUCTURE](../../docs/BACKEND_STRUCTURE.md)
-- 远程查询与错误状态：[APP_FLOW](../../docs/APP_FLOW.md) §6
+- 语境辅助与远程查询交互：[APP_FLOW](../../docs/APP_FLOW.md) §6、§6.6
 - 设计主参考 [figma](../design/figma.md)，实现规则 [FRONTEND_GUIDELINES](../../docs/FRONTEND_GUIDELINES.md)
 - 精确版本：[TECH_STACK](../../docs/TECH_STACK.md)
 - 会话断点：[PROGRESS](PROGRESS.md)
 
-请求/响应、脚本 API、SQLite 表结构不在本计划复制。
+请求/响应、脚本 API、选择器/LLM 契约、SQLite 表结构不在本计划复制。
 
 ## 1. 范围
 
@@ -31,6 +31,9 @@ M4 把数据源扩展到 HTTP，完成两条解析路径、缓存、远程查询
 - SQLite 缓存：24h、负缓存 5min、源失效、统计、清理。
 - 三种策略的远程语义、事件、QueryMeta。
 - 远程源管理界面、测试面板、缓存设置。
+- JEV-like 选择器适配：输入候选义项 + 原句，输出义项/置信度；阈值状态机。
+- LLM 兜底：OpenAI-compatible、低置信度触发、AI 卡、缓存、隐私门禁。
+- 语境辅助设置分区与测试按钮。
 - 自动化测试与性能记录。
 
 **不做**
@@ -38,6 +41,8 @@ M4 把数据源扩展到 HTTP，完成两条解析路径、缓存、远程查询
 - OAuth/Cookie 会话。
 - 脚本网络/文件/定时器。
 - 脚本可视化调试器。
+- 训练/微调选择器或 LLM。
+- 把 AI 结果写回词典源。
 - 分词、模糊搜索、发音服务。
 - 跨设备同步。
 - Anki 媒体上传增强。
@@ -51,6 +56,8 @@ M4 把数据源扩展到 HTTP，完成两条解析路径、缓存、远程查询
 - `src/bg/js/ankiconnect.js` 如何区分超时、HTTP 状态、Anki 错误。
 
 ODH 在浏览器内用 DOM 解析网页；我们的 JSONPath/脚本只接收响应体与查询词，不执行 DOM。只借鉴“字段映射 + 失败降级”的思路，不复制代码或类结构。
+
+选择器采用 JEV-like 本地服务的通用契约，不绑定某个具体模型实现；JEV 类模型的置信度可能过度自信，阈值与 UI 文案必须体现“模型自评”。
 
 ## 3. 任务分解
 
@@ -119,13 +126,48 @@ ODH 在浏览器内用 DOM 解析网页；我们的 JSONPath/脚本只接收响�
 
 **验收**：JSONPath 与脚本各配一个源成功；失败有可读错误；缓存可清理。
 
-### T4.7 测试与性能
+### T4.7 JEV-like 选择器
+
+- 按 BACKEND_STRUCTURE §7.4 调用本地 HTTP 选择器；只允许 http/https。
+- 输入 `word`、`sentence`、`senses`；输出 `selected_id`、`confidence`、`model`。
+- 校验 `selected_id` 属于候选；非法/缺失按低置信度。
+- 阈值状态机：`>= high` 选中；`low..high` 模糊；`<= low` 低置信度；无原句不调用。
+- 选择器失败 `unavailable`，不自动调 LLM；UI 保留全部义项。
+- 默认仅回环；远程需 `selector_allow_remote` 与二次确认。
+- 事件 `lookup://sense-result`；`get_sense_resolution` 兜底。
+
+**验收**：高/中/低/无匹配/非法 id/超时/远程阻止均有测试；推荐不删除其他义项。
+
+### T4.8 LLM 兜底
+
+- 仅低置信度或无候选、且有原句、且用户启用时触发。
+- OpenAI-compatible `POST`；`temperature=0`；超时 15s；单次调用。
+- 要求 JSON：`definition`、`part_of_speech`、`confidence`、`explanation`；坏 JSON 丢弃。
+- 定义纯文本 ≤600 字符；不解析 HTML；`AiDefinition` 标注模型。
+- 远程端点需 `allow_remote`；API key 只读环境变量；不写日志。
+- 结果写 `sense_cache` 7 天；提示词版本进 key。
+- UI 显示“AI 生成 · 模型 · 可能不准确”，用户点“使用此释义”才生效。
+
+**验收**：低置信度生成 AI 卡；超时/坏 JSON/远程阻止有可读状态；原文/原句不写日志；高置信度不调用 LLM。
+
+### T4.9 语境辅助 UI 与设置
+
+- popup 推荐条、置信度、推荐义项高亮、AI 卡、切换义项；按 APP_FLOW §6.6。
+- 设置新增“语境辅助”：选择器地址/超时/阈值、LLM 地址/模型/超时/key 环境变量、回环限制、测试按钮、缓存清理。
+- 无原句显示“缺少原句”；选择器不可用不阻塞结果。
+- 保存使用当前义项；AI 卡使用后来源写 `AI · model`。
+- 扩展通过桥接 `sense_available` + `/v1/sense` 展示，不直连服务。
+
+**验收**：高/中/低三种状态可手工复现；AI 未启用时只显示词典；设置保存后重启仍生效。
+
+### T4.10 测试与性能
 
 - wiremock：标准契约、鉴权、超时、500、重定向、超大响应、编码。
+- 选择器 mock：高/中/低/非法 id/超时/远程阻止；LLM mock：正常/坏 JSON/超时/401。
 - JSONPath/脚本/缓存/路由用例。
-- 手工：mock 服务配置两种解析；关闭服务看本地结果；断网看缓存；清缓存恢复网络。
-- 性能：缓存 p95 <5ms；JSONPath 100 条 <10ms；脚本典型响应额外 <20ms；远程超时 ≤配置+200ms。
-- 写 `.agents/notes/M4-remote-baseline.md`。
+- 手工：mock 服务配置两种解析；配置 JEV-like mock 与本地 LLM；关闭服务看本地结果；断网看缓存。
+- 性能：缓存 p95 <5ms；JSONPath 100 条 <10ms；选择器额外 ≤800ms；LLM 不阻塞首屏；远程超时 ≤配置+200ms。
+- 写 `.agents/notes/M4-remote-baseline.md` 与 `.agents/notes/M4-sense-baseline.md`。
 
 ## 4. 阶段决策
 
@@ -137,6 +179,9 @@ ODH 在浏览器内用 DOM 解析网页；我们的 JSONPath/脚本只接收响�
 | 重定向 | 跨主机停止；同主机最多 2 次 |
 | TLS | rustls + 系统信任；不提供忽略证书开关 |
 | 相对资源 | 丢弃，remote 契约要求绝对 URL |
+| 义项选择 | JEV-like 本地 HTTP；置信度是模型自评，阈值可调 |
+| LLM 边界 | 只做低置信度兜底，纯文本、人工采用、默认关闭 |
+| 隐私 | 选择器默认回环；LLM 默认回环；远程需显式允许 |
 
 ## 5. 风险
 
@@ -150,6 +195,11 @@ ODH 在浏览器内用 DOM 解析网页；我们的 JSONPath/脚本只接收响�
 | 远程拖慢 first_hit | 优先级、每源超时、总截止 |
 | 令牌进日志 | 日志白名单 + 测试断言 |
 | 自签名证书 | 文档说明系统信任或 HTTP |
+| 选择器过度自信 | 阈值可调；UI 标“模型自评”；低置信度走 LLM |
+| 义项切分不准 | M1 提取尽力而为；无法拆分时整条候选；不承诺精确 |
+| LLM 幻觉 | 标注 AI、用户确认、不覆盖词典、可编辑 |
+| 原句外发 | 默认回环；远程二次确认；日志不记录 |
+| sense 事件拖慢 UI | 异步事件；首屏不等；超时静默 |
 
 ## 6. 提交拆分
 
@@ -162,7 +212,12 @@ feat(core): implement remote query strategies
 feat(manager): add remote source editor and tester
 feat(settings): add cache settings
 feat(popup): append remote results and cache badges
+feat(core): add jev-like sense selector
+feat(core): add llm fallback with privacy gate
+feat(settings): add sense assist section
+feat(popup): show sense recommendation and ai card
 test: cover remote jsonpath script cache routing
+test: cover sense selector and llm fallback
 docs(notes): record m4 sandbox and latency
 ```
 
@@ -174,9 +229,13 @@ docs(notes): record m4 sandbox and latency
 - [ ] local_first/first_hit/aggregate 语义正确。
 - [ ] 缓存命中断网可用，标记正确。
 - [ ] 远程源可增删改测，缓存可清理。
+- [ ] JEV-like 高/中/低置信度状态正确，低置信度触发 LLM。
+- [ ] AI 释义标注模型、默认不选中、用户确认后才可保存。
+- [ ] 选择器/LLM 失败不影响词典结果。
+- [ ] 远程选择器/LLM 在未允许时被阻止，API key 不进日志。
 - [ ] 鉴权头不进日志、不跨主机发送。
 - [ ] 自动化测试与性能记录完成。
 
 ## 8. 交接给 M5
 
-M5 完成远程/缓存设置视觉与文案、许可证清单、README 与脚本文档、性能复测；若沙箱隔离不足，文档明确边界。
+M5 完成远程/缓存/语境辅助设置视觉与文案、许可证清单、README 与脚本文档、性能复测；若沙箱或 AI 隔离不足，文档明确边界。

@@ -26,10 +26,11 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 
 **做**
 
-- 设置五个分区补全：通用、Anki、浏览器扩展、缓存、关于。
+- 设置六个分区补全：通用、Anki、语境辅助、浏览器扩展、缓存、关于。
 - 三套浅色主题：figma 默认，apple/cursor 只换配色。
 - 管理器、弹窗、扩展的空态/错误态/加载态与键盘可达。
-- Anki 字段映射校验与连接引导。
+- Anki 字段映射校验、同词多卡策略与连接引导。
+- 语境辅助设置、隐私说明、AI 释义与推荐义项文案。
 - README、用户指南、配置参考、扩展文档、开发文档、故障排查。
 - 许可证、第三方清单、SPDX 头、`cargo-deny`。
 - CI 全量检查、tag 发布工作流、版本同步。
@@ -50,9 +51,10 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 按 [APP_FLOW](../../docs/APP_FLOW.md) §7 与 [FRONTEND_GUIDELINES](../../docs/FRONTEND_GUIDELINES.md) 实现：
 
 - 通用：热键录制、主题三选一、查询策略、条数、启动行为。
-- Anki：连接状态、endpoint、牌组、模板、四字段映射、标签、重复开关、刷新、三步安装引导。
+- Anki：连接状态、endpoint、牌组、模板、四字段映射、标签、同词多卡策略、刷新、三步安装引导。
+- 语境辅助：选择器/LLM 开关、地址、阈值、超时、API key 环境变量、回环限制、测试、缓存清理、隐私说明。
 - 浏览器扩展：启用、端口、令牌显示/复制/轮换、运行状态、配对步骤。
-- 缓存：TTL、统计、清理。
+- 缓存：TTL、统计、清理；语境缓存单独清理。
 - 关于：版本、构建信息、配置/日志/缓存目录、许可证、仓库链接、重开引导。
 
 保存与回滚规则：
@@ -61,8 +63,9 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 - 端口变更重启桥接；失败保留输入并显示占用错误。
 - 令牌轮换需二次确认，旧令牌立即失效。
 - 主题即时生效；0.1.0 没有深色主题。
+- 选择器/LLM 默认关闭；远程端点必须显式允许。
 
-**验收**：五个分区全部可用；热键冲突不丢旧值；配对与轮换可完成。
+**验收**：六个分区全部可用；热键冲突不丢旧值；配对与轮换可完成；语境辅助测试请求不写缓存。
 
 ### T5.2 UI 打磨
 
@@ -80,9 +83,10 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 - 字段映射刷新与保存前校验；模板改名/牌组不存在有清晰动作。
 - 未运行 AnkiConnect 显示安装/重启指引，不写测试卡片。
 - 扩展 401、离线、端口占用、令牌轮换各自有可操作文案。
+- 推荐义项、AI 释义、同语境提示在桌面端与扩展文案一致。
 - 不显示原始堆栈。
 
-**验收**：手工走完 Anki 正常/未运行/字段缺失/重复；扩展 401/离线/成功。
+**验收**：手工走完 Anki 正常/未运行/字段缺失；同词不同句连续保存；低置信度 AI 卡片；扩展 401/离线/成功。
 
 ### T5.4 文档
 
@@ -91,7 +95,8 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 - 配置参考：`docs/configuration.md`，字段与默认值必须与 BACKEND_STRUCTURE 一致。
 - 扩展文档：`docs/extension.md`，`.xpi` 构建/安装/未签名限制。
 - 开发文档：`docs/development.md`，模块、线程、测试、发布。
-- 故障排查：`docs/troubleshooting.md`，覆盖热键、捕获、MDX、图片、Anki、扩展、远程、脚本。
+- 故障排查：`docs/troubleshooting.md`，覆盖热键、捕获、MDX、图片、Anki、扩展、远程、脚本、语境选择器、LLM、同词多卡。
+- 文档写清：AI 结果不是词典原文；同词多卡是默认行为；同语境提示可覆盖；LLM 原句外发与回环默认。
 - 现有 PRD/APP_FLOW/TECH_STACK/FRONTEND_GUIDELINES/BACKEND_STRUCTURE 随实现更新，不另起重复文档。
 
 **验收**：按 README 从干净克隆可构建；文档命令可复制执行；链接无死链。
@@ -100,7 +105,7 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 
 - 保留 AGPL-3.0 `LICENSE`；README 与关于页声明。
 - 新增源文件加 `SPDX-License-Identifier: AGPL-3.0-only`。
-- `THIRD_PARTY_LICENSES.md` 覆盖直接依赖；libmdx AGPL、WXT/React MIT、web-ext MPL（构建期）、DOMPurify 双许可。
+- `THIRD_PARTY_LICENSES.md` 覆盖直接依赖；libmdx AGPL、WXT/React MIT、web-ext MPL（构建期）、DOMPurify 双许可、scraper ISC。
 - `deny.toml` 允许 AGPL-3.0-only、MIT、Apache-2.0、BSD、ISC、Zlib、Unicode-3.0、CC0；拒绝未知。
 - `[sources] allow-git` 只放 libmdx；其余未知 git 拒绝。
 - libmdx 的 license 字段不是合法 SPDX：先提上游 PR，合并前用只改该字段的 fork/patch 并固定 rev，不得在 deny 配置忽略。
@@ -131,6 +136,8 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 | 空闲内存 | ≤150MB |
 | 500MB 词典后内存 | ≤500MB |
 | 远程超时 | 配置+200ms 内 |
+| 语境选择器 | p95 ≤800ms，不阻塞词典首屏 |
+| LLM 兜底 | 低置信度时才调用，超时 15s 内静默 |
 | 8 小时内存增长 | <10% |
 
 - 记录硬件、系统、词典、方法、原始数据到 `docs/performance.md`。
@@ -160,7 +167,7 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 
 - 干净 Windows 虚拟机：安装 Anki+AnkiConnect、安装应用、加真实 MDX/MDD、记事本与 Firefox 划词、编辑、制卡、扩展配对、远程 mock、断网缓存、重启、卸载。
 - 对照 [PRD](../../docs/PRD.md) 成功标准与 [APP_FLOW](../../docs/APP_FLOW.md) 主路径逐项打勾。
-- 代码审查：无 `unwrap`（非测试）、无 `any`、无内联 style、IPC 类型只从 `src/lib`、无 `0.0.0.0`、锁文件已提交、生成目录未提交。
+- 代码审查：无 `unwrap`（非测试）、无 `any`、无内联 style、IPC 类型只从 `src/lib`、无 `0.0.0.0`、Anki 请求 `allowDuplicate: true`、锁文件已提交、生成目录未提交。
 - 发布 0.1.0，更新 PROGRESS 与 CHANGELOG。
 
 ## 3. 已知限制（写入 README）
@@ -175,6 +182,10 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 8. 安装包未签名，SmartScreen 可能拦截。
 9. 配置/缓存明文存本机，不提供云同步。
 10. 不提供自动更新。
+11. 义项切分依赖词典 HTML 结构；无法拆分时整条释义作为一个候选。
+12. JEV-like 置信度是模型自评，可能过度自信；阈值可调但仍需人工确认。
+13. AI 释义由 LLM 生成，可能不准确；默认关闭，必须手动采用。
+14. 同一单词允许重复卡片；应用层只提示“同词同句同释义”，不保证 Anki 侧历史完全一致。
 
 ## 4. 风险
 
@@ -193,10 +204,11 @@ M5 把功能齐全的原型变成可交付项目：设置补全、状态统一�
 ## 5. 提交拆分
 
 ```text
-feat(settings): complete general anki bridge and cache
+feat(settings): complete general anki sense bridge and cache
 feat(ui): unify empty loading and error states
 fix(ui): improve keyboard navigation and accessibility
 docs: rewrite readme and add user guide troubleshooting
+docs(sense): document selector llm and multi-card boundaries
 docs(extension): add build install and signing limits
 chore(license): add spdx headers and third party list
 ci: add deny extension and release workflow
@@ -206,9 +218,12 @@ chore(release): prepare v0.1.0
 
 ## 6. 出口检查清单
 
-- [ ] 设置五个分区可用，保存/回滚一致。
-- [ ] 热键、主题、Anki 映射、扩展配对、缓存通过手工测试。
+- [ ] 设置六个分区可用，保存/回滚一致。
+- [ ] 热键、主题、Anki 映射、扩展配对、缓存、语境辅助通过手工测试。
+- [ ] 同词不同句连续保存多张卡；同语境提示可覆盖。
+- [ ] AI 释义标注模型、默认不选中；选择器/LLM 失败不影响词典。
 - [ ] README 与 docs 完成，命令可执行，配置表与实现一致。
+- [ ] 语境辅助隐私说明与远程端点警告写入文档。
 - [ ] LICENSE、第三方清单、SPDX、deny 配置齐全。
 - [ ] CI 与发布工作流可产出安装包与 `.xpi`。
 - [ ] 性能目标有数据，差距有记录。
