@@ -584,6 +584,8 @@ function parse(ctx) {
 
 配置：`sense.selector_endpoint`，默认 `http://127.0.0.1:8787/v1/select`。
 
+MVP 只支持 HTTP 适配，不直接启动任意本地进程。JEV 类 CLI 需要用户自行包装成本地 HTTP 服务，避免命令注入与权限扩大。
+
 请求：
 
 ```json
