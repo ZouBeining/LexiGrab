@@ -41,12 +41,14 @@ Rust 进 `src-tauri/src/{core,sources,parsers,anki,platform,bridge}`；前端进
 - 前端与扩展不得直接调用 AnkiConnect 或远程词典，一律经 Tauri Command 或本地桥接。
 - `FormatParser::lookup(&self)` 需要缓存时用内部可变性，不改 trait 签名。
 - `Entry.source_name` 由 RemoteHttpSource / LocalFileSource 填写，解析器不返回。
+- 语境辅助只做建议：JEV-like 结果高亮但不静默替换词典；AI 释义必须标注模型并由用户确认。
+- 同一单词允许多张卡片；Anki 请求 `allowDuplicate: true`，应用层只提示“同词同句同释义”。
 - 远程失败不得抛阻断错误或阻塞 UI；本地桥接不得绑定 `0.0.0.0`，不得省略 `X-Auth-Token`。
 - `references/ODH`（MIT）只研究句子提取、词典脚本与 Anki 封装，不复制代码。
 
 ## 提交与禁止
 
-Conventional Commits；一个 commit 只动一个模块，Rust、前端、扩展、文档分开。禁止偏离 PROMPT.md 的技术栈或 AGPL-3.0；禁止不兼容 copyleft 依赖；禁止修改 `PROMPT.md`；禁止整段复制设计文档。
+Conventional Commits；一个 commit 只动一个模块，Rust、前端、扩展、文档分开。禁止偏离 PROMPT.md 的技术栈或 AGPL-3.0；禁止不兼容 copyleft 依赖；禁止整段复制设计文档。
 
 ## 活文档
 
