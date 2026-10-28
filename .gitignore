@@ -1,3 +1,7 @@
+# ---------- Reference materials ----------
+references/*
+!references/README.md
+
 # ---------- Tauri 2 ----------
 src-tauri/target/
 src-tauri/gen/
