@@ -1,0 +1,56 @@
+# LexiGrab M1 测试夹具配置。路径相对于本文件目录解析。
+[meta]
+schema_version = 2
+device_id = "fixture-device"
+
+[general]
+hotkey = "CmdOrCtrl+Shift+D"
+theme = "figma"
+query_strategy = "local_first"
+max_entries_per_source = 3
+max_entries_total = 20
+start_minimized = false
+
+[anki]
+endpoint = "http://127.0.0.1:8765"
+deck = "Default"
+model = "Basic"
+tags = ["global-dict", "lexigrab-test"]
+duplicate_policy = "warn"
+field_map = { word = "Word", definition = "Definition", sentence = "Sentence", source = "Source" }
+
+[bridge]
+enabled = false
+port = 12787
+token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[cache]
+ttl_hours = 24
+negative_ttl_minutes = 5
+
+[sense]
+enabled = false
+selector_endpoint = "http://127.0.0.1:8787/v1/select"
+selector_timeout_ms = 800
+selector_allow_remote = false
+low_confidence = 0.55
+high_confidence = 0.72
+max_senses = 20
+
+[llm]
+enabled = false
+endpoint = "http://127.0.0.1:11434/v1/chat/completions"
+model = ""
+api_key_env = "LEXIGRAB_LLM_API_KEY"
+timeout_ms = 15000
+max_tokens = 320
+allow_remote = false
+cache_ttl_hours = 168
+
+[[sources]]
+id = "local-mini"
+name = "Mini"
+type = "local_file"
+enabled = true
+priority = 10
+paths = ["mini.mdx"]
