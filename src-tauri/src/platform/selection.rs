@@ -20,6 +20,18 @@ pub struct ScreenAnchor {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectionContext {
     pub text: String,
+    /// Sentence around the selection; desktop UIA capture or the extension may fill it.
+    #[serde(default)]
+    pub sentence: Option<String>,
+    /// Browser URL from the extension bridge; desktop capture leaves it empty.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Page title from the extension bridge; desktop capture leaves it empty.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Page host from the extension bridge; desktop capture leaves it empty.
+    #[serde(default)]
+    pub domain: Option<String>,
     pub anchor: Option<ScreenAnchor>,
     pub foreground_hwnd: i64,
     pub app_name: String,

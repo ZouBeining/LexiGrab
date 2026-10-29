@@ -88,6 +88,12 @@ fn capture_inner(started: Instant) -> Result<SelectionContext, CaptureError> {
 
     Ok(SelectionContext {
         text,
+        // Sentence capture (UIA) is fetched separately by the runtime so the
+        // clipboard path stays within its own budget.
+        sentence: None,
+        url: None,
+        title: None,
+        domain: None,
         anchor,
         foreground_hwnd: foreground.0 as isize as i64,
         app_name: app_name.unwrap_or_else(|| "unknown".to_string()),
