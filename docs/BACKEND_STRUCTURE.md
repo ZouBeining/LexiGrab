@@ -21,7 +21,7 @@ Tauri 主进程（Windows）
 
 ### 1.1 线程与阻塞边界
 
-- libmdx 的 `MdxReader` 内含 `Rc`，不是 `Send`/`Sync`。每个 `.mdx` 文件由独立的标准线程持有，外部只保留命令通道。
+- `mdictlib` 的 `MdxFile`/`MddFile` 为文件后端解析器；每个 `.mdx` 文件仍由独立的标准线程持有，外部只保留命令通道，便于超时、回收与替换实现。
 - 每个 worker 的查询超时 500ms，打开超时 15s。命令队列有界，满时返回 `DICT_BUSY`。
 - 本地查询、AnkiConnect、远程 HTTP、SQLite 都在 `spawn_blocking` 中执行，不阻塞异步运行时。
 - QuickJS 脚本在独立调用中创建 Runtime，超时 200ms（范围 50–1000ms），内存上限 16MB。
@@ -95,6 +95,7 @@ pub enum ResponseParserConfig {
 ```toml
 [meta]
 schema_version = 2
+device_id = "<uuid>"              # 首次启动生成，用于诊断与后续多端同步
 
 [general]
 hotkey = "CmdOrCtrl+Shift+D"

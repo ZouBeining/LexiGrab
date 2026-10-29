@@ -94,6 +94,7 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `url` | 2.5.2 | MIT OR Apache-2.0 | URL |
 | `percent-encoding` | 2.3.1 | MIT OR Apache-2.0 | 资源路径编码 |
 | `unicode-normalization` | 0.1.24 | MIT OR Apache-2.0 | 查询归一化 |
+| `mdictlib` | 0.2.8 | MIT | 唯一 MDX/MDD 读取库 |
 | `clap` | 4.5.23 | MIT OR Apache-2.0 | 开发 CLI |
 | `tracing` | 0.1.41 | MIT | 日志 |
 | `tracing-subscriber` | 0.3.19 | MIT | 日志输出 |
@@ -120,11 +121,11 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 
 | 组件 | 版本 | 许可证 | 说明 |
 | --- | --- | --- | --- |
-| libmdx | git `111cab6cddb119ce35158ee1a8d641bab698c87e`（0.5.0） | AGPL-3.0 | 唯一 MDX/MDD 读取库 |
+| mdictlib | 0.2.8（crates.io） | MIT | 唯一 MDX/MDD 读取库；计划中的 libmdx git rev 已不可达（2026-10-29 核实） |
 | QuickJS | 由 `rquickjs 0.14.0` 内置 | MIT | 脚本执行 |
 | SQLite | 由 `rusqlite` bundled 提供 | 公有领域 | 缓存 |
 
-libmdx 不在 crates.io，必须使用 git 依赖并固定 rev。其 `Cargo.toml` 的 license 字段不是合法 SPDX，需要在合规检查时按 PLAN_M5 处理，不得直接忽略。
+原计划的 libmdx（git `111cab6c`，AGPL-3.0）在 GitHub 上无对应提交，`https://github.com/QuickDict/libmdx` 是 C 实现。改用 `mdictlib`（MIT，支持 MDX/MDD 1.x/2.x、LZO/zlib、GBK/Big5 等编码，并自带 v2.0 写入器用于生成测试夹具）。许可证与 AGPL-3.0 兼容。
 
 ## 7. 外部服务
 

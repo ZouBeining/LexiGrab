@@ -400,7 +400,7 @@ timeout_ms = 3000
 
 1. 文档：README 含架构图、配置说明、AnkiConnect 安装指引；关键 trait 需 rustdoc 注释。
 
-1. 许可证：项目整体采用 AGPL-3.0（与 libmdx 保持一致），根目录放置 LICENSE，README 注明。
+1. 许可证：项目整体采用 AGPL-3.0，根目录放置 LICENSE，README 注明。
 
 1. 脚本沙箱：ScriptParser 必须限制执行时间、内存与可用全局对象；脚本加载失败或超时须降级为“该源无结果”，不得中断查询流程。
 
@@ -408,7 +408,7 @@ timeout_ms = 3000
 
 ## 注意事项与风险
 
-1. 许可证一致性：项目采用 AGPL-3.0 开源，与 libmdx 兼容；引入任何新依赖前需检查其许可证是否与 AGPL-3.0 兼容。
+1. 许可证一致性：项目采用 AGPL-3.0 开源；引入任何新依赖前需检查其许可证是否与 AGPL-3.0 兼容。
 
 1. 句子捕获（Windows 优先）：MVP 仅在 Windows 上实现尽力而为的捕获（UI Automation 或模拟复制读剪贴板），X11/KDE/macOS 的实现路径记录在文档中供后续阶段参考。浏览器场景的可靠捕获由扩展的 content script 承担，不依赖桌面端。
 
