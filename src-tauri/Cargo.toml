@@ -18,6 +18,9 @@ tauri-build = { version = "2.7.4", features = [] }
 [dependencies]
 tauri = { version = "2.12.5", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2.4.1"
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.140"
 thiserror = "2.0.11"
@@ -25,7 +28,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 toml = "0.8.19"
-uuid = { version = "1.17", features = ["v4"] }
+uuid = { version = "1.17", features = ["v4", "v5"] }
 unicode-normalization = "0.1.24"
 percent-encoding = "2.3.1"
 url = "2.5.2"
@@ -42,6 +45,8 @@ reqwest = { version = "0.13.0", default-features = false, features = [
   "native-tls",
 ] }
 mdictlib = "0.2.8"
+# saved_cards 语境指纹库；bundled 让 SQLite 随构建产物分发，不依赖系统 DLL。
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dev-dependencies]
 wiremock = "0.6.2"
@@ -67,6 +72,9 @@ raw-window-handle = "0.6.2"
 
 [profile.dev]
 incremental = true
+# 本机 MSVC 在自定义 debug 记录下编译 C 代码会报 D8050（aws-lc / SQLite 同样问题），
+# 关闭 C 依赖的调试信息；Rust 侧仍保留 symbol 用于回溯。
+debug = 0
 
 [profile.release]
 codegen-units = 1
