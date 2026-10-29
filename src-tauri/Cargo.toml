@@ -24,6 +24,28 @@ thiserror = "2.0.11"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
+toml = "0.8.19"
+uuid = { version = "1.17", features = ["v4"] }
+unicode-normalization = "0.1.24"
+percent-encoding = "2.3.1"
+url = "2.5.2"
+mime_guess = "2.0.4"
+ammonia = "4.0.0"
+lol_html = "2.6.0"
+scraper = "0.24.0"
+clap = { version = "4.5.23", features = ["derive"] }
+# 不用默认 rustls/aws-lc-sys：本机 MSVC 编译 aws-lc 的 C 代码失败（cl D8050），
+# Windows 用 native-tls（Schannel）即满足远程 HTTPS 需求。
+reqwest = { version = "0.13.0", default-features = false, features = [
+  "blocking",
+  "json",
+  "native-tls",
+] }
+mdictlib = "0.2.8"
+
+[dev-dependencies]
+wiremock = "0.6.2"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.0", features = [
