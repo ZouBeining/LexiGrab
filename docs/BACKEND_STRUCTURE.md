@@ -345,6 +345,10 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 | `probe_anki` | 无 | `AnkiStatus` | 只读探测 |
 | `open_config_dir` | 无 | `void` | 打开配置目录 |
 | `get_query_meta` | `query_id` | `QueryMeta \| null` | 缓存/远程标记 |
+| `show_window` | `label` | `void` | 白名单显示窗口（M0 遗留，供诊断页使用） |
+| `debug_trigger_capture` | 无 | `CaptureResult` | 绕过热键触发一次捕获（开发诊断） |
+| `get_capture_stats` | 无 | `CaptureStats` | 捕获耗时与成功率样本 |
+| `get_last_capture` | 无 | `CaptureResult \| null` | 弹窗恢复捕获失败态 |
 | `get_sense_resolution` | `query_id` | `SenseResolution \| null` | 语境推荐结果 |
 | `test_sense_selector` | `word`, `sentence` | `SenseResolution` | 设置页测试，不写缓存 |
 | `test_llm` | `word`, `sentence`, `senses` | `AiDefinition` | 设置页测试，不写缓存 |
@@ -404,6 +408,7 @@ INTERNAL
 | `lookup://sense-result` | `SenseResolution` |
 | `dict://index-progress` | `{ source_id, path, phase, entry_count?, message? }` |
 | `popup://selection` | `SelectionContext` |
+| `popup://capture-error` | `CaptureError`（M0 起；捕获失败时弹窗进入错误态） |
 | `runtime://hotkey-error` | `{ message }` |
 | `runtime://anki-status` | `AnkiStatus` |
 | `bridge://status` | `BridgeStatus` |

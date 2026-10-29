@@ -105,7 +105,7 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `subtle` | 2.6.1 | BSD-3-Clause | 令牌常量时间比较 |
 | `jsonpath-rust` | 1.0.6 | MIT | JSONPath |
 | `rquickjs` | 0.14.0 | MIT | 脚本沙箱 |
-| `rusqlite` | 0.33.0（`bundled`） | MIT | 缓存 |
+| `rusqlite` | 0.32.1（`bundled`） | MIT | saved_cards 语境指纹（M2）；计划值 0.33 因 MSVC 构建环境锁到 0.32.1 |
 | `tokio-util` | 0.7.13 | MIT | 取消令牌 |
 | `windows` | 0.62.0 | MIT OR Apache-2.0 | Win32 API |
 | `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 | HWND 获取 |
