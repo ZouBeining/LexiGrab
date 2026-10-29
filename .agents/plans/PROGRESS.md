@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-10-28。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-10-29。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -8,41 +8,45 @@
 - 六个阶段的计划：[M0](PLAN_M0.md)、[M1](PLAN_M1.md)、[M2](PLAN_M2.md)、[M3](PLAN_M3.md)、[M4](PLAN_M4.md)、[M5](PLAN_M5.md)。
 - 参考材料目录与 [references/README.md](../../references/README.md)；ODH 已浅克隆到 `references/ODH`（commit `ce5e7da`，MIT），被 `.gitignore` 排除。
 - 设计主参考已确认：`.agents/design/figma.md`；Apple/Cursor 仅作可替换配色主题。
-- M0 工程骨架：Tauri 2 + React 19 + TypeScript + Tailwind 4，三个窗口入口（manager/popup/settings），Figma 三主题 token，ESLint 禁 `any` 与内联 style，CI 工作流。
-- M0 划词链路：全局热键 + 250ms 去抖、Windows 剪贴板选区捕获（文本/锚点/前台进程，180ms 预算）、非激活置顶弹窗（NOACTIVATE + TOOLWINDOW，点击不抢焦点）、编辑模式激活、多屏 clamp、文件日志与诊断统计。
-- M0 报告：[M0-selection-capture](../notes/M0-selection-capture.md)。
-- 新增需求文档化：JEV-like 义项选择 + 低置信度 LLM 兜底；同词多卡（2026-10-28，仅改 docs/plans，未改代码）。
-- 当前代码检查：`cargo test` 17 项通过；`pnpm typecheck`、`pnpm lint` 通过。M0 代码不涉及 MDX/Anki/语境辅助，因此本轮无需改代码。
+- M0 工程骨架与划词链路：[M0-selection-capture](../notes/M0-selection-capture.md)；`cargo test`、`pnpm typecheck`、`pnpm lint` 通过。
+- **M1 核心链路（2026-10-29）**：
+  - 配置：`Settings` 全量字段、schema v1→v2 迁移、校验、原子保存、损坏备份、首次生成 device_id/bridge token；`LEXIGRAB_CONFIG_DIR` 覆盖。
+  - MDX：`mdictlib 0.2.8` 适配层 + 每文件 worker（15s 打开 / 500ms 查询超时、有界队列、`WorkerDead`/`Timeout`/`Busy`、关闭回收）。
+  - HTML：lol_html 资源改写为 `mdx-res://{dict_id}/{path}` + ammonia 白名单清洗；512KB 上限。
+  - 义项：`SenseCandidate` 提取（列表/段落/整条退化、词性、最多 20）。
+  - 数据源与路由：`LocalFileSource`、`SourceRegistry`（priority/id 排序、reload 复用、坏文件隔离）、`QueryRouter`（first_hit/aggregate/local_first、失败隔离、条数上限与去重）。
+  - Anki：AnkiConnect 阻塞客户端（1.5s/3s 超时、错误分类、恒 `allowDuplicate: true`）与四字段映射；wiremock 覆盖。
+  - CLI：`lexigrab-dev` 的 lookup / sources / anki-decks / anki-models / add-note / bench；退出码 0/2/3/4。
+  - 夹具：`tests/fixtures/mini.mdx`/`mini.mdd`/`broken.mdx`/`mini-config.toml`，Rust 生成器 `examples/gen_fixtures.rs`。
+  - 报告：[M1-core-baseline](../notes/M1-core-baseline.md)；`cargo test` 125 项、`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 全绿。
 
 ## 进行中
 
-- 新增需求的文档与计划已更新：PRD、APP_FLOW、BACKEND_STRUCTURE、TECH_STACK、FRONTEND_GUIDELINES、AGENTS、PLAN_M1–M5。
-- M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入报告第 6 节。
+- M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入 M0 报告第 6 节。
 - CI 文件已提交，GitHub Actions 尚未实跑。
 
 ## 接下来
 
-1. 提交本轮文档变更，保持单模块原子提交。
+1. 提交本轮文档变更（含 M1 依赖选型变更），保持单模块原子提交。
 2. 补 T0.7 手工矩阵与双屏/150% 实机检查，回填 M0 报告。
-3. 进入 [PLAN_M1.md](PLAN_M1.md)：配置持久化、MDX 读取、义项提取与 Anki 四字段；多卡片在 M2 落地。
-4. M1 开始前把 `docs/` 与 `src/lib` 的 IPC 类型对齐一次（M0 新增的 `get_last_capture` / `popup://capture-error` 是临时诊断入口）。
+3. 进入 [PLAN_M2.md](PLAN_M2.md)：Tauri Command、事件与 `mdx-res` 协议、SQLite 缓存与 saved_cards、多卡 UI。
 
-## 代码影响检查（本轮未修改代码）
+## 代码影响检查（M1 已落地，M2 仍需改）
 
-当前已有 M0 代码，尚未实现 MDX、Anki、设置持久化、桥接或扩展。新需求暂时不需要改动 M0 代码，但后续实现必须改这些位置：
-
-- `src-tauri/src/platform/selection.rs`：`SelectionContext` 目前没有 `sentence` / `url` / `title` / `domain`；M2 需加可选字段并保持 serde 向后兼容。
-- `src-tauri/src/core/config.rs`：目前只有 `Paths`；M1 需加完整 `Settings`，并新增 `[sense]`、`[llm]`、`duplicate_policy`。
-- `src-tauri/src/core/state.rs`、`commands.rs`、`lib.rs`：M2/M4 需加 lookup、sense、LLM、saved_cards 相关命令与状态；目前只有 M0 捕获命令。
-- `src-tauri/Cargo.toml`：M1 加 `scraper`、MDX/Anki 依赖；M4 加选择器/LLM HTTP 与缓存依赖。
-- `src/lib/types.ts`、`events.ts`、`src/windows/popup/App.tsx`、`src/windows/settings/App.tsx`：需加 `SenseResolution`、`AiDefinition`、推荐/AI/多卡 UI 与“语境辅助”设置分区；目前是 M0 占位。
-- 扩展目录尚不存在；M3 再按扩展桥接与 sense 轮询实现。
+- `src-tauri/src/core/`：M1 已加 `entry/config/error/html/registry/query_router/runtime`；M2 需加 `get_query_meta` 环形缓存与 Tauri 事件转发。
+- `src-tauri/src/parsers/mdx.rs`、`sources/local_file.rs`、`anki/*`、`bin/lexigrab-dev.rs`：M1 新模块；M2 复用并把阻塞调用放进 `spawn_blocking`。
+- `src-tauri/src/commands.rs`、`lib.rs`、`platform/selection.rs`：M2 加 lookup/Anki/设置命令、`SelectionContext.sentence/url/title/domain` 与 `mdx-res` 协议。
+- `src-tauri/src/core/config.rs`：`[sense]`/`[llm]` 已存在但未接 UI；M4 使用。
+- `src/lib/types.ts`、`events.ts`、popup/settings：仍是 M0 占位，M2 接 Entry/SenseResolution/AiDefinition。
+- 扩展目录尚不存在；M3 实现 Firefox 扩展与桥接轮询。
 - 数据库尚不存在；M2 加 `saved_cards`，M4 加 `sense_cache`。
 
 ## 已知问题与阻塞
 
-- 本机 Windows Defender 开启“受控文件夹访问”：从本会话沙箱启动的未签名调试程序无法写 `%APPDATA%` / `%LOCALAPPDATA%`。验证用 `LEXIGRAB_HOME` 指向工作区内目录；用户在自己终端运行时若仍失败，需要把 `lexigrab.exe` 加入白名单。
-- 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可克隆 GitHub。
+- **依赖偏差**：计划中的 libmdx git `111cab6c` 在 GitHub/crates.io 均不存在；M1 改用 `mdictlib 0.2.8`（MIT）。详见 [M1-core-baseline](../notes/M1-core-baseline.md) 第 2 节。
+- 本机 Windows Defender 开启“受控文件夹访问”：未签名调试程序无法写 `%APPDATA%`/`%LOCALAPPDATA%`；测试临时目录改用 `src-tauri/target/test-tmp`，运行应用时用 `LEXIGRAB_HOME` 指向工作区内目录，或把 `lexigrab.exe` 加入白名单。
+- 本机 MSVC 编译 `aws-lc-sys`（rustls 默认后端）失败（cl D8050）；reqwest 改 `native-tls`（Schannel）。
+- 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可访问 GitHub。
 - pnpm 11 在 Windows 默认 junction 布局会让 ESLint 解析不到传递依赖；仓库用 `pnpm-workspace.yaml` 的 `nodeLinker: hoisted` 规避。
 - Git 直接使用 Schannel 克隆 GitHub 会报 `SEC_E_NO_CREDENTIALS`；使用 `git -c http.sslBackend=openssl` 可克隆。
 
@@ -57,3 +61,5 @@
 - ODH 只研究，不复制代码。
 - 三个窗口启动时预创建（popup/settings 隐藏）：Tauri 在命令线程里构建 WebView 会阻塞事件循环，懒创建不可用。
 - 快速模式用纯 Win32 `ShowWindow(SW_SHOWNOACTIVATE)` 显示，不走 tao `show()`；弹窗隐藏用 `SW_HIDE`，不然 tao 状态不一致导致空操作。
+- M1 起 MDX 读取统一走 `mdictlib`；查询归一化在适配层做（NFKC、去首尾标点、四种大小写变体），不改库。
+- M1 配置以完整文件路径寻址（`ConfigStore::with_config_path`）；CLI `--config` 指向任意文件名，桌面端默认 `config.toml`。

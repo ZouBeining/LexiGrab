@@ -4,7 +4,7 @@ title: 核心链路无 UI
 depends_on: [M0]
 exit_gate: 命令行完成 MDX 查词并写入 Anki 四字段卡片
 estimate: 8-12 人日
-status: planned
+status: done
 ---
 
 # M1 核心链路无 UI
@@ -225,17 +225,18 @@ docs(notes): record m1 core baseline
 
 ## 8. 出口检查清单
 
-- [ ] 夹具可查 `hello`，资源可读，URI 已改写。
-- [ ] `SenseCandidate` 可从结构化释义切出，无法切分时单候选。
-- [ ] `source_name` 由 source 层填写。
-- [ ] 三种策略有测试，失败源不阻断。
-- [ ] Anki 四字段可写入，模板校验生效。
-- [ ] 未运行/重复/字段缺失有可读错误。
-- [ ] CLI 可查词、列牌组/模板、制卡、压测。
-- [ ] `cargo test`、clippy、fmt 全绿。
-- [ ] 无 `unwrap()` / `expect()` 进入非测试代码。
-- [ ] 性能基线报告完成。
+- [x] 夹具可查 `hello`，资源可读，URI 已改写。
+- [x] `SenseCandidate` 可从结构化释义切出，无法切分时单候选。
+- [x] `source_name` 由 source 层填写。
+- [x] 三种策略有测试，失败源不阻断。
+- [x] Anki 四字段可写入，模板校验生效。
+- [x] 未运行/重复/字段缺失有可读错误。
+- [x] CLI 可查词、列牌组/模板、制卡、压测。
+- [x] `cargo test`、clippy、fmt 全绿。
+- [x] 无 `unwrap()` / `expect()` 进入非测试代码。
+- [x] 性能基线报告完成。
 
 ## 9. 交接给 M2
 
 M2 复用 Entry/Config/Registry/QueryRouter/EventSink/worker；M2 只加 `spawn_blocking`、Tauri 事件与 mdx-res 协议。M1 报告需说明 libmdx 的大小写/前后缀行为与大词典打开量级。
+
