@@ -48,7 +48,7 @@ Rust 进 `src-tauri/src/{core,sources,parsers,anki,platform,bridge}`；前端进
 
 ## 提交与禁止
 
-Conventional Commits；一个 commit 只动一个模块，Rust、前端、扩展、文档分开。禁止偏离 PROMPT.md 的技术栈或 AGPL-3.0；禁止不兼容 copyleft 依赖；禁止整段复制设计文档。
+Conventional Commits，message 全英文（subject 与 body 都是）；一个 commit 只动一个模块，Rust、前端、扩展、文档分开。禁止偏离 PROMPT.md 的技术栈或 AGPL-3.0；禁止不兼容 copyleft 依赖；禁止整段复制设计文档。
 
 ## 活文档
 

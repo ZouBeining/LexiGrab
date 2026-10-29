@@ -27,9 +27,7 @@
 
 ## 接下来
 
-1. 提交本轮文档变更（含 M1 依赖选型变更），保持单模块原子提交。
-2. 补 T0.7 手工矩阵与双屏/150% 实机检查，回填 M0 报告。
-3. 进入 [PLAN_M2.md](PLAN_M2.md)：Tauri Command、事件与 `mdx-res` 协议、SQLite 缓存与 saved_cards、多卡 UI。
+1. 进入 [PLAN_M2.md](PLAN_M2.md)：Tauri Command、事件与 `mdx-res` 协议、SQLite 缓存与 saved_cards、多卡 UI。
 
 ## 代码影响检查（M1 已落地，M2 仍需改）
 
