@@ -1,6 +1,12 @@
-mod commands;
-mod core;
-mod platform;
+//! 后端库：M0 窗口/选区捕获 + M1 核心链路。
+//! 业务逻辑放在 core/sources/parsers/anki，Tauri 命令只做薄封装。
+
+pub mod anki;
+pub mod commands;
+pub mod core;
+pub mod parsers;
+pub mod platform;
+pub mod sources;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

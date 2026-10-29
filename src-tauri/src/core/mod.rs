@@ -1,6 +1,11 @@
 pub mod config;
+pub mod entry;
 pub mod error;
+pub mod html;
 pub mod logging;
+pub mod query_router;
+pub mod registry;
+pub mod runtime;
 pub mod shortcut;
 pub mod state;
 pub mod window;
