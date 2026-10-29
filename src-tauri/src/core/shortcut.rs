@@ -10,16 +10,39 @@ use crate::core::window;
 
 pub const DEFAULT_ACCELERATOR: &str = "CmdOrCtrl+Shift+D";
 const DEBOUNCE_WINDOW: Duration = Duration::from_millis(250);
+/// 桌面端句子捕获预算：UIA 慢于该值就放弃，不拖慢弹窗。
+const SENTENCE_BUDGET: Duration = Duration::from_millis(120);
 
-/// 注册全局热键。M2 修改热键时复用同一入口。
+/// 注册全局热键（启动时使用，会先注销已注册的热键）。
 pub fn register_hotkey(app: &AppHandle, accelerator: &str) -> IpcResult<()> {
-    let shortcut: Shortcut = accelerator.parse().map_err(|error| {
-        IpcError::new("HOTKEY_CONFLICT", "快捷键格式无效").with_detail(format!("{error}"))
-    })?;
-
     if let Err(error) = app.global_shortcut().unregister_all() {
         debug!(error = %error, "注销旧热键失败");
     }
+    install_shortcut(app, accelerator)
+}
+
+/// 切换热键：先注册新组合，成功后再注销旧组合；失败时旧热键保持可用。
+pub fn replace_hotkey(app: &AppHandle, old: &str, new: &str) -> IpcResult<()> {
+    if old == new {
+        return Ok(());
+    }
+    install_shortcut(app, new)?;
+    match old.parse::<Shortcut>() {
+        Ok(previous) => {
+            if let Err(error) = app.global_shortcut().unregister(previous) {
+                warn!(error = %error, "注销旧热键失败");
+            }
+        }
+        Err(error) => debug!(error = %error, accelerator = old, "旧热键格式无效，跳过注销"),
+    }
+    Ok(())
+}
+
+/// 解析并安装单个全局热键，按下时触发捕获。
+fn install_shortcut(app: &AppHandle, accelerator: &str) -> IpcResult<()> {
+    let shortcut: Shortcut = accelerator.parse().map_err(|error| {
+        IpcError::new("HOTKEY_CONFLICT", "快捷键格式无效").with_detail(format!("{error}"))
+    })?;
 
     let handle = app.clone();
     app.global_shortcut()
@@ -59,6 +82,8 @@ pub fn trigger_capture(app: &AppHandle) {
         debug!("忽略 250ms 内的重复热键触发");
         return;
     }
+    // 新一次划词总是从快速模式开始；上一次编辑态的标记不能延续。
+    state.set_popup_interactive(false);
 
     if let Some(popup) = app.get_webview_window(window::POPUP) {
         let visible = popup.is_visible().unwrap_or(false);
@@ -104,5 +129,35 @@ pub fn trigger_capture(app: &AppHandle) {
         if let Err(error) = window::show_popup(&handle, anchor) {
             warn!(code = %error.code, "显示弹窗失败");
         }
+
+        // 句子捕获放在弹窗显示之后并行进行：失败或超时都只留空，不阻塞首屏。
+        if let Some(selection) = result.selection {
+            let text = selection.text.clone();
+            let sentence_handle = handle.clone();
+            std::thread::spawn(move || {
+                let Some(sentence) = capture_sentence_budget(SENTENCE_BUDGET) else {
+                    return;
+                };
+                let state = sentence_handle.state::<AppState>();
+                if let Some(updated) = state.update_sentence(&text, Some(sentence)) {
+                    if let Err(error) = sentence_handle.emit("popup://selection", updated) {
+                        warn!(error = %error, "发送带原句的 popup://selection 失败");
+                    }
+                }
+            });
+        }
     });
+}
+
+/// 桌面端尽力而为的句子捕获；非 Windows 平台直接为空。
+fn capture_sentence_budget(budget: Duration) -> Option<String> {
+    #[cfg(windows)]
+    {
+        crate::platform::windows::uia::capture_sentence_budget(budget)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = budget;
+        None
+    }
 }
