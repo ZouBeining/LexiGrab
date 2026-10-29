@@ -7,6 +7,8 @@ edition = "2021"
 rust-version = "1.99"
 license = "AGPL-3.0-or-later"
 publish = false
+# `tauri dev` 用 `cargo run --no-default-features`，有多个 bin 时必须指定默认目标。
+default-run = "lexigrab"
 
 [lib]
 name = "lexigrab_lib"
