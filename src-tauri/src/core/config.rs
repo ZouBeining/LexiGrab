@@ -13,19 +13,21 @@ pub const SCHEMA_VERSION: u32 = 2;
 pub struct Paths {
     pub config_dir: PathBuf,
     pub log_dir: PathBuf,
+    /// SQLite 数据库（saved_cards 等）。M2 起使用。
+    pub cache_db: PathBuf,
 }
 
 impl Paths {
     pub fn resolve() -> Self {
         if let Some(config_dir) = std::env::var_os("LEXIGRAB_CONFIG_DIR") {
             let config_dir = PathBuf::from(config_dir);
-            let log_dir = std::env::var_os("LEXIGRAB_HOME")
+            let root = std::env::var_os("LEXIGRAB_HOME")
                 .map(PathBuf::from)
-                .map(|base| base.join("logs"))
-                .unwrap_or_else(|| config_dir.join("logs"));
+                .unwrap_or_else(|| config_dir.clone());
             return Self {
                 config_dir,
-                log_dir,
+                log_dir: root.join("logs"),
+                cache_db: root.join("cache.db"),
             };
         }
         if let Some(root) = std::env::var_os("LEXIGRAB_HOME") {
@@ -33,26 +35,30 @@ impl Paths {
             return Self {
                 config_dir: base.join("config"),
                 log_dir: base.join("logs"),
+                cache_db: base.join("cache.db"),
             };
         }
         let config_dir = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."))
             .join("LexiGrab");
-        let log_dir = std::env::var_os("LOCALAPPDATA")
+        let local = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("LexiGrab")
-            .join("logs");
+            .join("LexiGrab");
         Self {
             config_dir,
-            log_dir,
+            log_dir: local.join("logs"),
+            cache_db: local.join("cache.db"),
         }
     }
 
     pub fn ensure(&self) -> std::io::Result<()> {
         ensure_dir(&self.config_dir)?;
         ensure_dir(&self.log_dir)?;
+        if let Some(parent) = self.cache_db.parent() {
+            ensure_dir(parent)?;
+        }
         Ok(())
     }
 }
@@ -742,7 +748,7 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target")
             .join("test-tmp")
-            .join(tag);
+            .join(format!("{tag}-{}", std::process::id()));
         if root.exists() {
             let _ = std::fs::remove_dir_all(&root);
         }

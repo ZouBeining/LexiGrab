@@ -156,6 +156,12 @@ impl From<AnkiError> for IpcError {
     }
 }
 
+impl From<SourceError> for IpcError {
+    fn from(error: SourceError) -> Self {
+        IpcError::new(error.code(), error.to_string())
+    }
+}
+
 impl From<ConfigError> for IpcError {
     fn from(error: ConfigError) -> Self {
         IpcError::new(error.code(), error.to_string())
