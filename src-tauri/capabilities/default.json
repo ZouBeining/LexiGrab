@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "M0 最小权限：核心能力与全局热键",
+  "description": "M2 桌面端最小权限：核心能力、全局热键、文件选择器、系统浏览器",
   "windows": ["manager", "popup", "settings"],
-  "permissions": ["core:default", "global-shortcut:default"]
+  "permissions": [
+    "core:default",
+    "global-shortcut:default",
+    "dialog:default",
+    "opener:allow-open-url"
+  ]
 }

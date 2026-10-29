@@ -12,7 +12,8 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' mdx-res: http://mdx-res.localhost data:; media-src 'self' mdx-res: http://mdx-res.localhost; font-src 'self' mdx-res: http://mdx-res.localhost data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' mdx-res: http://mdx-res.localhost data: blob:; media-src 'self' mdx-res: http://mdx-res.localhost; font-src 'self' mdx-res: http://mdx-res.localhost data:; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

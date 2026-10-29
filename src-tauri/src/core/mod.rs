@@ -5,6 +5,7 @@ pub mod html;
 pub mod logging;
 pub mod query_router;
 pub mod registry;
+pub mod resources;
 pub mod runtime;
 pub mod shortcut;
 pub mod state;
