@@ -1,0 +1,14 @@
+[project]
+name = "lexigrab-m2-manual"
+version = "0.1.0"
+description = "pywinauto harness for the M2 manual acceptance matrix"
+requires-python = ">=3.12"
+dependencies = [
+    "pywinauto>=0.6.9",
+    "pywin32>=306",
+    "psutil>=6.0",
+    "pillow>=11.0",
+]
+
+[tool.uv]
+package = false

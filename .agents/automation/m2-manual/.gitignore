@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+home/
+artifacts/
+*.pyc
+fixtures/
