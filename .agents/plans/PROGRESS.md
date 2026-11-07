@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-10-29。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-11-07。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -29,17 +29,20 @@
   - 同词多卡：`saved_cards`（SQLite/WAL/损坏隔离）、NFKC+小写+压缩空白+uuid v5 指纹、`warn|allow` 策略、始终 `allowDuplicate: true`；导出前剥离本地媒体。
   - 句子捕获：UIA 段落 120ms 预算，失败留空并异步补发选区事件。
   - 报告：[M2-acceptance](../notes/M2-acceptance.md)；Rust 189 项、前端 75 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
+- **M2 手工矩阵自动化（2026-11-07）**：
+  - 用 uv 管理的 Python + pywinauto 驱动真实应用跑完 9 项矩阵（源管理、划词/焦点、真实 Anki 制卡、托盘/单实例、mdx-res 渲染、时延），脚本与产物在 [.agents/automation/m2-manual](../../automation/m2-manual/)，结论写入 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
+  - 时延：弹窗可见 p95 84.3ms；首结果 p95 296.4ms；41MB 词典加载中导航 137ms。真实 Anki 26.9.3 落库字段/标签核对通过。
+  - 新发现 3 个待修复项：mdx-res 图片在弹窗内破图、同语境提示对含本地媒体释义失效、托盘图标无 tooltip/可访问名称。
 
 ## 进行中
 
 - M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入 M0 报告第 6 节。
-- M2 手工矩阵：划词→弹窗、焦点保持、真实 Anki 制卡、托盘/单实例、大词典 UI 响应等待在交互桌面补测，清单见 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
 - CI 文件已提交，GitHub Actions 尚未实跑。
 
 ## 接下来
 
 1. 进入 [PLAN_M3.md](PLAN_M3.md)：Firefox 扩展、本地桥接（令牌/Origin/限流）、扩展配对与气泡。
-2. M2 手工矩阵补测后，把结果写回 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节并勾选 PLAN_M2 剩余项。
+2. 修复 M2 验收发现的缺陷（见 [M2-acceptance](../notes/M2-acceptance.md) 第 4 节）：mdx-res 图片渲染、含媒体释义的同语境指纹、托盘图标可访问名称；修完后复跑 `p2`/`p3`/`p5`。
 
 ## 代码影响检查（M2 已落地，M3/M4 仍需改）
 
@@ -56,11 +59,12 @@
 ## 已知问题与阻塞
 
 - **依赖偏差**：计划中的 libmdx git `111cab6c` 在 GitHub/crates.io 均不存在；M1 改用 `mdictlib 0.2.8`（MIT）。详见 [M1-core-baseline](../notes/M1-core-baseline.md) 第 2 节。
-- 本机 Windows Defender 开启“受控文件夹访问”：未签名调试程序无法写 `%APPDATA%`/`%LOCALAPPDATA%`；测试临时目录改用 `src-tauri/target/test-tmp`，运行应用时用 `LEXIGRAB_HOME` 指向工作区内目录，或把 `lexigrab.exe` 加入白名单。
+- **工作区低完整性标签**：本机仓库根目录带 `Mandatory Label\Low Mandatory Level`，从仓库内构建/启动的 `lexigrab.exe` 也以 Low 运行，无法向普通窗口 `SendInput`（划词超时）且不能写 `%APPDATA%`。自动化把 exe 复制到 `%TEMP%` 运行；此前归因 Defender 受控文件夹访问的判断已修正。详见 [M2-acceptance](../notes/M2-acceptance.md) §3.3。
+- M2 验收（2026-11-07）发现待修复：`mdx-res` 图片在弹窗内破图；含本地图片/音频的释义第二次保存不弹同语境提示（前端预检与导出端指纹不一致）；托盘图标无 tooltip/UIA 名称。详见 [M2-acceptance](../notes/M2-acceptance.md) 第 4 节。
 - 本机 MSVC 编译 `aws-lc-sys`（rustls 默认后端）失败（cl D8050）；reqwest 改 `native-tls`（Schannel）。
 - 本机 MSVC 14.51 编译 bundled SQLite（`libsqlite3-sys`）的 C 代码同样报 `D8050`；`src-tauri/Cargo.toml` 设 `[profile.dev] debug = 0` 规避，Rust 侧回溯仍可用。若换机器可去掉该限制。
 - **依赖偏差**：`rusqlite` 实际锁定 `0.32.1`（`bundled`），计划为 `0.33`；契约行为一致，记录在 [TECH_STACK](../../docs/TECH_STACK.md) 第 5 节。
-- M2 手工矩阵未在无人值守会话执行；自动测试、CLI 回归与启动冒烟已过，详见 [M2-acceptance](../notes/M2-acceptance.md)。
+- M2 手工矩阵已用 pywinauto 自动化补测（结论见 M2-acceptance 第 3 节）；自动测试、CLI 回归与启动冒烟此前已过。
 - 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可访问 GitHub。
 - pnpm 11 在 Windows 默认 junction 布局会让 ESLint 解析不到传递依赖；仓库用 `pnpm-workspace.yaml` 的 `nodeLinker: hoisted` 规避。
 - Git 直接使用 Schannel 克隆 GitHub 会报 `SEC_E_NO_CREDENTIALS`；使用 `git -c http.sslBackend=openssl` 可克隆。
