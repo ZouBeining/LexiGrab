@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-11-07。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-11-15。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -28,11 +28,16 @@
   - 生命周期：单实例插件、托盘、关闭隐藏、退出注销热键、启动后台加载词典与探测 Anki。
   - 同词多卡：`saved_cards`（SQLite/WAL/损坏隔离）、NFKC+小写+压缩空白+uuid v5 指纹、`warn|allow` 策略、始终 `allowDuplicate: true`；导出前剥离本地媒体。
   - 句子捕获：UIA 段落 120ms 预算，失败留空并异步补发选区事件。
-  - 报告：[M2-acceptance](../notes/M2-acceptance.md)；Rust 189 项、前端 75 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
+  - 报告：[M2-acceptance](../notes/M2-acceptance.md)；Rust 193 项、前端 75 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
 - **M2 手工矩阵自动化（2026-11-07）**：
   - 用 uv 管理的 Python + pywinauto 驱动真实应用跑完 9 项矩阵（源管理、划词/焦点、真实 Anki 制卡、托盘/单实例、mdx-res 渲染、时延），脚本与产物在 [.agents/automation/m2-manual](../../automation/m2-manual/)，结论写入 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
   - 时延：弹窗可见 p95 84.3ms；首结果 p95 296.4ms；41MB 词典加载中导航 137ms。真实 Anki 26.9.3 落库字段/标签核对通过。
-  - 新发现 3 个待修复项：mdx-res 图片在弹窗内破图、同语境提示对含本地媒体释义失效、托盘图标无 tooltip/可访问名称。
+  - 新发现 3 个待修复项（已于 2026-11-15 修复，见下）：mdx-res 图片在弹窗内破图、同语境提示对含本地媒体释义失效、托盘图标无 tooltip/可访问名称。
+- **M2 验收缺陷修复（2026-11-15）**：
+  - `mdx-res` 破图：Wry 在 Windows 把 `http://mdx-res.localhost/{id}/...` 还原为 `mdx-res://localhost/{id}/...` 再交给协议处理器，`localhost` 被误读为 dict_id。`core/resources.rs` 跳过该 authority，并补 `mdx-res://localhost/...` 解析与端到端测试；`p5` 复跑 `apple` 正常显示 Fruit 插图。
+  - 同语境提示失效：预检与导出统一走 `anki::export::context_definition_text`（先剥离本地媒体再转纯文本），含图片/音频的释义第二次保存会命中已存语境；`card_tests` 覆盖预检与落库指纹一致。
+  - 托盘可访问名称：`TrayIconBuilder` 加 `.tooltip("LexiGrab")`，UIA Name 复验为 `LexiGrab`。
+  - Rust 测试 193 项全绿；`clippy`/`fmt`/`typecheck`/`lint`/`build` 通过。
 
 ## 进行中
 
@@ -42,7 +47,7 @@
 ## 接下来
 
 1. 进入 [PLAN_M3.md](PLAN_M3.md)：Firefox 扩展、本地桥接（令牌/Origin/限流）、扩展配对与气泡。
-2. 修复 M2 验收发现的缺陷（见 [M2-acceptance](../notes/M2-acceptance.md) 第 4 节）：mdx-res 图片渲染、含媒体释义的同语境指纹、托盘图标可访问名称；修完后复跑 `p2`/`p3`/`p5`。
+2. M2 验收缺陷已修复并复验：`p5` 已复跑通过（划词 + 弹窗内 `mdx-res` 图片渲染），托盘可访问名称经 UIA 实测为 `LexiGrab`；含媒体释义的同语境指纹由 `card_tests` 覆盖（未重跑会写真实 Anki 的 `p3`）。
 
 ## 代码影响检查（M2 已落地，M3/M4 仍需改）
 
@@ -60,7 +65,7 @@
 
 - **依赖偏差**：计划中的 libmdx git `111cab6c` 在 GitHub/crates.io 均不存在；M1 改用 `mdictlib 0.2.8`（MIT）。详见 [M1-core-baseline](../notes/M1-core-baseline.md) 第 2 节。
 - **工作区低完整性标签**：本机仓库根目录带 `Mandatory Label\Low Mandatory Level`，从仓库内构建/启动的 `lexigrab.exe` 也以 Low 运行，无法向普通窗口 `SendInput`（划词超时）且不能写 `%APPDATA%`。自动化把 exe 复制到 `%TEMP%` 运行；此前归因 Defender 受控文件夹访问的判断已修正。详见 [M2-acceptance](../notes/M2-acceptance.md) §3.3。
-- M2 验收（2026-11-07）发现待修复：`mdx-res` 图片在弹窗内破图；含本地图片/音频的释义第二次保存不弹同语境提示（前端预检与导出端指纹不一致）；托盘图标无 tooltip/UIA 名称。详见 [M2-acceptance](../notes/M2-acceptance.md) 第 4 节。
+- M2 验收（2026-11-07）发现的 3 项缺陷已于 2026-11-15 修复：`mdx-res` 破图（Windows `localhost` authority 被误读为 dict_id）、含媒体释义的同语境指纹不一致、托盘图标无 tooltip/UIA 名称。详见 [M2-acceptance](../notes/M2-acceptance.md) 第 4 节。
 - 本机 MSVC 编译 `aws-lc-sys`（rustls 默认后端）失败（cl D8050）；reqwest 改 `native-tls`（Schannel）。
 - 本机 MSVC 14.51 编译 bundled SQLite（`libsqlite3-sys`）的 C 代码同样报 `D8050`；`src-tauri/Cargo.toml` 设 `[profile.dev] debug = 0` 规避，Rust 侧回溯仍可用。若换机器可去掉该限制。
 - **依赖偏差**：`rusqlite` 实际锁定 `0.32.1`（`bundled`），计划为 `0.33`；契约行为一致，记录在 [TECH_STACK](../../docs/TECH_STACK.md) 第 5 节。
