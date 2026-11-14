@@ -75,6 +75,16 @@ pub fn strip_local_media(html: &str) -> String {
     }
 }
 
+/// Plain-text fingerprint input for a definition exactly as it is exported.
+///
+/// The popup's pre-save context check and the stored card fingerprint must
+/// agree, so both derive the text from the media-stripped HTML: local images
+/// and audio become `[图片]`/`[音频]` placeholders, which changes the text a
+/// raw-HTML scraper would produce.
+pub fn context_definition_text(html: &str) -> String {
+    definition_text(&strip_local_media(html))
+}
+
 /// Full export: strip/sanitize -> context check -> AnkiConnect addNote -> record.
 ///
 /// A failure to persist the saved-card row is logged but does not turn a
@@ -84,8 +94,8 @@ pub fn export_to_anki(
     payload: &AnkiPayload,
 ) -> Result<ExportOutcome, AnkiError> {
     let definition_html = strip_local_media(&payload.definition_html);
-    // The saved-card fingerprint is stored over plain text; compute it once so
-    // the pre-send check and the post-send record always agree.
+    // Derive the fingerprint from the exact stripped HTML that is sent, so the
+    // pre-send check and the post-send record always agree.
     let definition_plain = definition_text(&definition_html);
     let cleaned = AnkiPayload {
         word: payload.word.clone(),

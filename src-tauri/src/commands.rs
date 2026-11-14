@@ -297,12 +297,16 @@ fn export_to_anki_command(
 }
 
 /// 保存前检查同词同句同释义是否已经存过。
+///
+/// 指纹必须与导出端一致：先剥离本地媒体再做纯文本归一化，否则含图片/音频的
+/// 释义在第二次保存时不会命中已存语境。
 #[tauri::command]
 pub async fn check_card_context(app: AppHandle, payload: AnkiPayload) -> IpcResult<CardContext> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let cards = state.cards();
-        let definition_text = crate::anki::export::definition_text(&payload.definition_html);
+        let definition_text =
+            crate::anki::export::context_definition_text(&payload.definition_html);
         cards
             .check_context(&payload.word, payload.sentence.as_deref(), &definition_text)
             .map_err(IpcError::from)

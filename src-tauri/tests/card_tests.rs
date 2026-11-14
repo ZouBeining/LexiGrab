@@ -8,7 +8,10 @@ use serde_json::{json, Value};
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use lexigrab_lib::anki::export::{export_to_anki, strip_local_media, ExportDeps, ExportOutcome};
+use lexigrab_lib::anki::export::{
+    context_definition_text, definition_text, export_to_anki, strip_local_media, ExportDeps,
+    ExportOutcome,
+};
 use lexigrab_lib::core::config::{AnkiSettings, DuplicatePolicy};
 use lexigrab_lib::core::entry::AnkiPayload;
 use lexigrab_lib::core::error::AnkiError;
@@ -162,6 +165,37 @@ fn strip_local_media_drops_local_source_children() {
     assert!(!stripped.contains("mdx-res"), "stripped output: {stripped}");
 }
 
+#[test]
+fn context_text_matches_exported_media_definition() {
+    // Regression: the popup's pre-save check used to hash the raw HTML, while
+    // the export stored the media-stripped text, so a definition containing a
+    // local image never matched its own saved context on the second save.
+    let payload = sample_payload();
+    let exported = strip_local_media(&payload.definition_html);
+    let precheck = context_definition_text(&payload.definition_html);
+
+    assert!(
+        exported.contains("[图片]"),
+        "exported definition: {exported}"
+    );
+    assert_eq!(precheck, definition_text(&exported));
+    assert_ne!(
+        definition_text(&payload.definition_html),
+        precheck,
+        "raw-HTML text must differ from the exported text for this fixture"
+    );
+
+    let store = CardStore::in_memory().expect("open store");
+    store
+        .record_card("hello", Some("Hello world."), &precheck, "Mini", 9)
+        .expect("record card");
+    let context = store
+        .check_context("hello", Some("Hello world."), &precheck)
+        .expect("check context");
+    assert!(context.seen, "pre-save text must find the recorded context");
+    assert_eq!(context.note_id, Some(9));
+}
+
 // ---------------------------------------------------------------------------
 // Export pipeline against a mock AnkiConnect server
 // ---------------------------------------------------------------------------
@@ -268,6 +302,17 @@ async fn export_reports_context_on_second_identical_export() {
         .expect("first export should succeed");
     assert_eq!(first.note_id, 1234567890);
     assert!(!first.exact_context_seen);
+
+    // The popup asks `check_card_context` before the second save; it must see
+    // the row this export just recorded even though the definition has media.
+    let precheck = context_definition_text(&payload.definition_html);
+    let precheck_context = cards
+        .check_context("hello", Some("Hello world."), &precheck)
+        .expect("pre-save context check");
+    assert!(
+        precheck_context.seen,
+        "pre-save check must match the stored fingerprint"
+    );
 
     let second = run_export(settings, Arc::clone(&cards), payload.clone())
         .await
