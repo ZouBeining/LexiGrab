@@ -121,6 +121,22 @@ fn resolves_fixture_image_through_windows_localhost_uri() {
 }
 
 #[test]
+fn resolves_fixture_image_through_wry_localhost_authority() {
+    // Windows renders `mdx-res://{id}/...` as `http://mdx-res.localhost/{id}/...`
+    // and Wry reverts the authority to this form before the handler runs, so a
+    // regression here shows up as broken images and unplayable audio.
+    let registry = mini_registry(true);
+    let parsed = parse_request("mdx-res://localhost/local-mini-f1/img/hello.png")
+        .expect("parse reverted windows uri");
+    assert_eq!(parsed.dict_id, MINI_DICT_ID);
+    assert_eq!(parsed.path, "img/hello.png");
+
+    let resource = resolve_resource(&registry, &parsed).expect("resolve image");
+    assert!(resource.bytes.starts_with(b"\x89PNG"));
+    assert_eq!(resource.mime, "image/png");
+}
+
+#[test]
 fn resolves_fixture_audio_resource() {
     let registry = mini_registry(true);
     let parsed = parse_request("mdx-res://local-mini-f1/audio/hello.mp3").expect("parse");

@@ -6,8 +6,15 @@
 //! handler may receive any of these forms:
 //!
 //! - `mdx-res://{dict_id}/{encoded path}` (custom scheme, full URI);
-//! - `http://mdx-res.localhost/{dict_id}/{encoded path}` (Windows form);
+//! - `mdx-res://localhost/{dict_id}/{encoded path}` (Windows handler form);
+//! - `http://mdx-res.localhost/{dict_id}/{encoded path}` (Windows display form);
 //! - `/{dict_id}/{encoded path}` (bare path, e.g. `request.uri().path()`).
+//!
+//! Wry serves custom schemes on Windows through the `*.localhost` workaround
+//! and reverts `http://mdx-res.localhost/x` back to `mdx-res://localhost/x`
+//! before invoking the handler, so the `localhost` authority is not the
+//! dictionary id and must be skipped. Dictionary ids are generated as
+//! `{source_id}-f{index}`, so they can never collide with that authority.
 //!
 //! Parsing happens before decoding: the raw path is split on `/` and every
 //! segment is percent-decoded afterwards, so an encoded `/` or `\` can never
@@ -159,9 +166,10 @@ impl ResourceError {
 
 /// Parse a protocol request path into a dictionary id and a decoded path.
 ///
-/// Accepts the custom scheme and Windows `*.localhost` forms as full URIs, or
-/// the bare path (`/{dict_id}/{encoded path}`) with an optional leading slash.
-/// Query and fragment parts are ignored.
+/// Accepts the custom scheme (including the Windows `mdx-res://localhost/...`
+/// handler form), the Windows `*.localhost` form, or the bare path
+/// (`/{dict_id}/{encoded path}`) with an optional leading slash. Query and
+/// fragment parts are ignored.
 pub fn parse_request(raw_path: &str) -> Result<ParsedResource, ResourceError> {
     let path_part = strip_uri_prefix(raw_path);
     let path_part = strip_query_and_fragment(path_part);
@@ -291,10 +299,14 @@ fn is_allowed_mime(mime: &str) -> bool {
 }
 
 /// Strip a supported URI prefix, if any, leaving the shared path form.
+///
+/// The custom-scheme form additionally drops a leading `localhost` authority,
+/// which is what Wry hands to the Windows protocol handler. The `*.localhost`
+/// display form keeps its own host as part of the stripped prefix.
 fn strip_uri_prefix(raw: &str) -> &str {
     let custom = format!("{SCHEME}://");
     if let Some(rest) = strip_prefix_ascii_case_insensitive(raw, &custom) {
-        return rest;
+        return strip_localhost_authority(rest);
     }
     for host in ["http://mdx-res.localhost", "https://mdx-res.localhost"] {
         if let Some(rest) = strip_prefix_ascii_case_insensitive(raw, host) {
@@ -302,6 +314,24 @@ fn strip_uri_prefix(raw: &str) -> &str {
         }
     }
     raw
+}
+
+/// Drop a `localhost` URI authority from `{authority}/{dict_id}/{path}`.
+///
+/// Only the exact host name is removed; a dictionary id such as
+/// `localhost-f1` is left untouched because it has no `/` right after the
+/// name.
+fn strip_localhost_authority(rest: &str) -> &str {
+    let trimmed = rest.strip_prefix('/').unwrap_or(rest);
+    let Some(remainder) = strip_prefix_ascii_case_insensitive(trimmed, "localhost") else {
+        return rest;
+    };
+    match remainder.strip_prefix('/') {
+        Some(tail) => tail,
+        // `mdx-res://localhost` without a path stays invalid.
+        None if remainder.is_empty() => remainder,
+        None => rest,
+    }
 }
 
 /// Case-insensitive `strip_prefix` that never splits UTF-8 boundaries.
@@ -389,6 +419,41 @@ mod tests {
             let parsed = parse_request(&raw).expect("parse");
             assert_eq!(parsed.dict_id, "local-mini-f1");
             assert_eq!(parsed.path, "img/hello.png");
+        }
+    }
+
+    #[test]
+    fn parses_custom_scheme_with_localhost_authority() {
+        // Wry reverts `http://mdx-res.localhost/...` to this form before the
+        // Windows custom-protocol handler runs.
+        for raw in [
+            "mdx-res://localhost/local-mini-f1/img/hello.png",
+            "mdx-res://LOCALHOST/local-mini-f1/img/hello.png",
+            "mdx-res://localhost/local-mini-f1/img/hello.png?cache=1",
+        ] {
+            let parsed = parse_request(raw).expect("parse");
+            assert_eq!(parsed.dict_id, "local-mini-f1", "{raw}");
+            assert_eq!(parsed.path, "img/hello.png", "{raw}");
+        }
+    }
+
+    #[test]
+    fn does_not_mistake_dict_id_prefixed_with_localhost_for_authority() {
+        let parsed = parse_request("mdx-res://localhost-f1/img/hello.png").expect("parse");
+        assert_eq!(parsed.dict_id, "localhost-f1");
+        assert_eq!(parsed.path, "img/hello.png");
+    }
+
+    #[test]
+    fn rejects_localhost_authority_without_resource_path() {
+        for raw in [
+            "mdx-res://localhost",
+            "mdx-res://localhost/",
+            "mdx-res://localhost/local-mini-f1",
+            "mdx-res://localhost/local-mini-f1/",
+        ] {
+            let error = parse_request(raw).expect_err("incomplete resource path");
+            assert_eq!(error.http_status(), 400, "{raw}");
         }
     }
 
