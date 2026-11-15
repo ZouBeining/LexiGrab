@@ -22,6 +22,23 @@ use crate::platform::{CaptureMethod, CaptureResult, SelectionContext};
 const MAX_SAMPLES: usize = 200;
 /// QueryMeta 环形缓存只保留最近 8 个 query_id。
 pub const MAX_QUERY_META: usize = 8;
+/// 桥接语境查询环形缓存上限，与 QueryMeta 一致。
+pub const MAX_SENSE_QUERIES: usize = 8;
+
+/// `lookup_collect_all` 的结果：已收集条目、贡献来源名与是否因截止时间中断。
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CollectAllResult {
+    pub entries: Vec<Entry>,
+    pub source_names: Vec<String>,
+    pub partial: bool,
+}
+
+/// 桥接 `/v1/sense/{query_id}` 的状态；M4 会写入 `Resolved`。
+#[derive(Debug, Clone, PartialEq)]
+pub enum SenseQueryState {
+    Pending,
+    Resolved(serde_json::Value),
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HotkeyStatus {
@@ -81,6 +98,7 @@ pub struct AppState {
     last_capture: Mutex<Option<CaptureResult>>,
     samples: Mutex<Vec<CaptureSample>>,
     query_meta: Mutex<VecDeque<QueryMeta>>,
+    sense_queries: Mutex<VecDeque<(String, SenseQueryState)>>,
     popup_interactive: AtomicBool,
     last_trigger: Mutex<Option<Instant>>,
     config_warning: Option<String>,
@@ -138,6 +156,7 @@ impl AppState {
             last_capture: Mutex::new(None),
             samples: Mutex::new(Vec::new()),
             query_meta: Mutex::new(VecDeque::new()),
+            sense_queries: Mutex::new(VecDeque::new()),
             popup_interactive: AtomicBool::new(false),
             last_trigger: Mutex::new(None),
             config_warning,
@@ -237,6 +256,104 @@ impl AppState {
             .iter()
             .find(|meta| meta.query_id == query_id)
             .cloned()
+    }
+
+    /// 并发查询全部启用本地源，按 `deadline` 截止；未赶上的源计入 `partial`。
+    ///
+    /// 桥接的 `lookup_collect_all` 用它：每个源一个线程（源查询本身已有 500ms
+    /// 超时），主线程用 `recv_timeout` 等剩余时间，到点即返回已收集结果。
+    /// 未完成的线程自行结束，结果丢弃。
+    pub fn lookup_collect_all(&self, query: &str, deadline: Duration) -> CollectAllResult {
+        let settings = self.settings();
+        let sources = read(&self.registry).enabled_source_handles();
+        if sources.is_empty() {
+            return CollectAllResult::default();
+        }
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let expected = sources.len();
+        let per_source = settings.general.max_entries_per_source as usize;
+        let total = settings.general.max_entries_total as usize;
+        for source in sources {
+            let sender = sender.clone();
+            let query = query.to_string();
+            std::thread::spawn(move || {
+                let result = source.lookup(&query);
+                let _ = sender.send((source.name().to_string(), result));
+            });
+        }
+        drop(sender);
+
+        let started = Instant::now();
+        let mut collected = CollectAllResult::default();
+        let mut answered = 0usize;
+        while answered < expected {
+            if collected.entries.len() >= total {
+                // 达到总条数上限：剩余源不必再等，结果按计划截断。
+                collected.partial = true;
+                break;
+            }
+            let remaining = deadline.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                collected.partial = true;
+                break;
+            }
+            match receiver.recv_timeout(remaining) {
+                Ok((name, Ok(entries))) => {
+                    answered += 1;
+                    if !entries.is_empty()
+                        && !collected.source_names.iter().any(|known| known == &name)
+                    {
+                        collected.source_names.push(name);
+                    }
+                    for entry in entries.into_iter().take(per_source) {
+                        if collected.entries.len() >= total {
+                            break;
+                        }
+                        collected.entries.push(entry);
+                    }
+                }
+                Ok((_, Err(error))) => {
+                    answered += 1;
+                    tracing::warn!(code = error.code(), "桥接查询单源失败，已隔离");
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    collected.partial = true;
+                    break;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    collected.partial = true;
+                    break;
+                }
+            }
+        }
+        collected
+    }
+
+    /// 登记一个进行中的语境查询；M4 完成后用 [`Self::resolve_sense`] 写入结果。
+    pub fn mark_sense_pending(&self, query_id: &str) {
+        self.set_sense_state(query_id, SenseQueryState::Pending);
+    }
+
+    /// 写入已完成的语境结果（M4 使用）。
+    pub fn resolve_sense(&self, query_id: &str, payload: serde_json::Value) {
+        self.set_sense_state(query_id, SenseQueryState::Resolved(payload));
+    }
+
+    pub fn sense_query_state(&self, query_id: &str) -> Option<SenseQueryState> {
+        lock(&self.sense_queries)
+            .iter()
+            .find(|(id, _)| id == query_id)
+            .map(|(_, state)| state.clone())
+    }
+
+    fn set_sense_state(&self, query_id: &str, state: SenseQueryState) {
+        let mut ring = lock(&self.sense_queries);
+        ring.retain(|(existing, _)| existing != query_id);
+        ring.push_back((query_id.to_string(), state));
+        while ring.len() > MAX_SENSE_QUERIES {
+            ring.pop_front();
+        }
     }
 
     pub fn hotkey_status(&self) -> HotkeyStatus {
@@ -381,6 +498,7 @@ mod tests {
             last_capture: Mutex::new(None),
             samples: Mutex::new(Vec::new()),
             query_meta: Mutex::new(VecDeque::new()),
+            sense_queries: Mutex::new(VecDeque::new()),
             popup_interactive: AtomicBool::new(false),
             last_trigger: Mutex::new(None),
             config_warning: None,
@@ -449,5 +567,42 @@ mod tests {
             state.query_meta("q1").map(|meta| meta.query_id),
             Some("q1".to_string())
         );
+    }
+
+    #[test]
+    fn collect_all_without_sources_is_complete_and_empty() {
+        let state = state();
+        let collected = state.lookup_collect_all("hello", Duration::from_millis(50));
+        assert!(collected.entries.is_empty());
+        assert!(collected.source_names.is_empty());
+        assert!(!collected.partial);
+    }
+
+    #[test]
+    fn sense_query_states_are_pending_then_resolved() {
+        let state = state();
+        assert!(state.sense_query_state("q1").is_none());
+        state.mark_sense_pending("q1");
+        assert_eq!(
+            state.sense_query_state("q1"),
+            Some(SenseQueryState::Pending)
+        );
+        state.resolve_sense("q1", serde_json::json!({ "status": "selected" }));
+        assert_eq!(
+            state.sense_query_state("q1"),
+            Some(SenseQueryState::Resolved(
+                serde_json::json!({ "status": "selected" })
+            ))
+        );
+    }
+
+    #[test]
+    fn sense_query_ring_keeps_latest_eight() {
+        let state = state();
+        for index in 0..10 {
+            state.mark_sense_pending(&format!("q{index}"));
+        }
+        assert!(state.sense_query_state("q1").is_none());
+        assert!(state.sense_query_state("q9").is_some());
     }
 }

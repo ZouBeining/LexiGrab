@@ -106,6 +106,15 @@ impl SourceRegistry {
             .collect()
     }
 
+    /// 拥有所有权的启用源快照，供并发查询（桥接 `lookup_collect_all`）使用。
+    pub fn enabled_source_handles(&self) -> Vec<Arc<dyn DictionarySource>> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.config.enabled)
+            .map(|entry| Arc::clone(&entry.source))
+            .collect()
+    }
+
     pub fn states(&self) -> Vec<SourceStateEntry> {
         self.entries
             .iter()

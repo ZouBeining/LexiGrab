@@ -377,6 +377,25 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
     state.settings()
 }
 
+/// 桥接运行状态：设置页与扩展配对的信息来源。
+#[tauri::command]
+pub fn get_bridge_status(
+    bridge: State<'_, crate::bridge::BridgeService>,
+) -> crate::bridge::BridgeStatus {
+    bridge.status()
+}
+
+/// 轮换桥接令牌：写盘后旧令牌立即 401，扩展需重新配对。
+#[tauri::command]
+pub fn regenerate_bridge_token(app: AppHandle, state: State<'_, AppState>) -> IpcResult<String> {
+    let mut settings = state.settings();
+    settings.bridge.token = crate::core::config::generate_bridge_token();
+    let saved = state.replace_settings(settings)?;
+    app.state::<crate::bridge::BridgeService>()
+        .apply(&saved.bridge);
+    Ok(saved.bridge.token)
+}
+
 /// 保存设置：先校验，热键变化时先尝试注册；保存失败恢复旧热键。
 #[tauri::command]
 pub fn update_settings(
@@ -396,6 +415,9 @@ pub fn update_settings(
                 state.set_hotkey_status(&saved.general.hotkey, true, None);
             }
             spawn_reload(&app);
+            // 端口/启用变化会重启桥接；端口占用只进状态，不回滚已保存的配置。
+            app.state::<crate::bridge::BridgeService>()
+                .apply(&saved.bridge);
             Ok(saved)
         }
         Err(error) => {

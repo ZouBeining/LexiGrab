@@ -2,6 +2,7 @@
 //! 业务逻辑放在 core/sources/parsers/anki/db，Tauri 命令只做薄封装。
 
 pub mod anki;
+pub mod bridge;
 pub mod commands;
 pub mod core;
 pub mod db;
@@ -85,6 +86,8 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::open_config_dir,
+            commands::get_bridge_status,
+            commands::regenerate_bridge_token,
         ])
         .setup(move |app| {
             core::window::mark_main_thread();
@@ -123,6 +126,11 @@ pub fn run() {
             // 大词典打开与 Anki 探测都放到后台，避免拖慢首屏。
             spawn_registry_load(&handle);
             spawn_anki_probe(&handle);
+
+            // 桥接只监听 127.0.0.1；端口占用时状态为 failed，不自动换端口。
+            let bridge_settings = app.state::<AppState>().settings().bridge;
+            app.manage(bridge::BridgeService::new(handle.clone()));
+            app.state::<bridge::BridgeService>().apply(&bridge_settings);
             Ok(())
         });
 
@@ -133,6 +141,7 @@ pub fn run() {
                 let _ =
                     tauri_plugin_global_shortcut::GlobalShortcutExt::global_shortcut(app_handle)
                         .unregister_all();
+                app_handle.state::<bridge::BridgeService>().stop();
             }
         }),
         Err(error) => tracing::error!(error = %error, "应用启动失败"),

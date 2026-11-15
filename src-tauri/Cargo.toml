@@ -49,10 +49,19 @@ reqwest = { version = "0.13.0", default-features = false, features = [
 mdictlib = "0.2.8"
 # saved_cards 语境指纹库；bundled 让 SQLite 随构建产物分发，不依赖系统 DLL。
 rusqlite = { version = "0.32", features = ["bundled"] }
+# M3 本地桥接：只监听 127.0.0.1，axum 复用 Tauri 已有的 tokio 运行时。
+axum = { version = "0.8.1", default-features = false, features = [
+  "http1",
+  "json",
+  "tokio",
+] }
+tokio = { version = "1.43.0", features = ["net", "sync", "time"] }
 
 [dev-dependencies]
 wiremock = "0.6.2"
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+http-body-util = "0.1.2"
+tower = { version = "0.5.2", features = ["util"] }
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "net", "io-util", "time"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.0", features = [
