@@ -4,7 +4,7 @@ title: Firefox 扩展与本地桥接
 depends_on: [M2]
 exit_gate: Firefox 选中单词后扩展捕获词、原句、页面信息，收到桌面端结果并成功制卡；.xpi 可安装且重启后仍在
 estimate: 10-14 人日
-status: done
+status: in_progress
 ---
 
 # M3 Firefox 扩展与本地桥接
