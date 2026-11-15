@@ -9,6 +9,7 @@ import type {
   AnkiModel,
   AnkiPayload,
   AnkiStatus,
+  BridgeStatus,
   CaptureResult,
   CaptureStats,
   CardContext,
@@ -154,6 +155,20 @@ export function updateSettings(settings: Settings): Promise<Settings> {
 
 export function getRuntimeStatus(): Promise<RuntimeStatus> {
   return call<RuntimeStatus>("get_runtime_status");
+}
+
+// ---------------------------------------------------------------------------
+// 浏览器扩展桥接
+// ---------------------------------------------------------------------------
+
+/** 桥接运行状态：是否监听、端口、最近成功请求与启动错误。 */
+export function getBridgeStatus(): Promise<BridgeStatus> {
+  return call<BridgeStatus>("get_bridge_status");
+}
+
+/** 轮换令牌；返回新令牌，旧令牌立即失效。 */
+export function regenerateBridgeToken(): Promise<string> {
+  return call<string>("regenerate_bridge_token");
 }
 
 /** 打开配置目录（系统文件管理器）。 */

@@ -54,23 +54,6 @@ export function SenseSection() {
   );
 }
 
-/** 浏览器扩展 is planned for M4; show pairing scope only. */
-export function ExtensionSection() {
-  return (
-    <SectionScaffold
-      id="extension"
-      title="浏览器扩展"
-      description="本地桥接、端口、令牌与配对步骤。"
-      milestone="M4"
-      items={[
-        "启用桥接、修改端口并查看运行状态。",
-        "令牌默认遮罩，可显示、复制与轮换。",
-        "页面气泡的配对三步与最近请求时间。",
-      ]}
-    />
-  );
-}
-
 /** 缓存 is planned for M4; show scope only. */
 export function CacheSection() {
   return (

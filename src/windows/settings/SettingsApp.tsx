@@ -6,8 +6,9 @@ import { Button } from "../../components/Button";
 import { Spinner } from "../../components/Spinner";
 import { AboutSection } from "./AboutSection";
 import { AnkiSection } from "./AnkiSection";
+import { ExtensionSection } from "./ExtensionSection";
 import { GeneralSection } from "./GeneralSection";
-import { CacheSection, ExtensionSection, SenseSection } from "./PlaceholderSections";
+import { CacheSection, SenseSection } from "./PlaceholderSections";
 
 const SECTIONS = [
   { id: "general", label: "通用" },
@@ -80,7 +81,7 @@ export function SettingsApp() {
   }, []);
 
   const renderSection = () => {
-    if (section === "general" || section === "anki") {
+    if (section === "general" || section === "anki" || section === "extension") {
       if (loading) {
         return (
           <div className="flex items-center gap-2 border-y border-hairline py-8">
@@ -101,17 +102,18 @@ export function SettingsApp() {
         );
       }
       if (settings) {
-        return section === "general" ? (
-          <GeneralSection settings={settings} onSaved={setSettings} />
-        ) : (
-          <AnkiSection settings={settings} onSaved={setSettings} />
-        );
+        if (section === "general") {
+          return <GeneralSection settings={settings} onSaved={setSettings} />;
+        }
+        if (section === "anki") {
+          return <AnkiSection settings={settings} onSaved={setSettings} />;
+        }
+        return <ExtensionSection settings={settings} onSaved={setSettings} />;
       }
       return null;
     }
 
     if (section === "sense") return <SenseSection />;
-    if (section === "extension") return <ExtensionSection />;
     if (section === "cache") return <CacheSection />;
     return <AboutSection />;
   };

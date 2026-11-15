@@ -159,6 +159,17 @@ export interface BridgeSettings {
   token: string;
 }
 
+/** 本地桥接运行状态（`get_bridge_status` 与 `bridge://status`）。 */
+export interface BridgeStatus {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  url: string;
+  api_version: number;
+  last_success_ms: number | null;
+  error: string | null;
+}
+
 export interface CacheSettings {
   ttl_hours: number;
   negative_ttl_minutes: number;

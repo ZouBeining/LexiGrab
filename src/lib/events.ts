@@ -3,7 +3,14 @@
  * 组件不手写事件字符串，一律用 EVENTS 常量或 listen* 辅助函数。
  */
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AnkiStatus, CaptureError, Entry, SelectionContext, SenseResolution } from "./types";
+import type {
+  AnkiStatus,
+  BridgeStatus,
+  CaptureError,
+  Entry,
+  SelectionContext,
+  SenseResolution,
+} from "./types";
 
 /** 事件 wire 名。 */
 export const EVENTS = {
@@ -15,6 +22,7 @@ export const EVENTS = {
   dictIndexProgress: "dict://index-progress",
   hotkeyError: "runtime://hotkey-error",
   ankiStatus: "runtime://anki-status",
+  bridgeStatus: "bridge://status",
   remoteResult: "lookup://remote-result",
   remoteError: "lookup://remote-error",
   senseResult: "lookup://sense-result",
@@ -86,6 +94,11 @@ export function onHotkeyError(handler: (payload: HotkeyErrorPayload) => void): P
 
 export function onAnkiStatus(handler: (payload: AnkiStatus) => void): Promise<UnlistenFn> {
   return listen<AnkiStatus>(EVENTS.ankiStatus, (event) => handler(event.payload));
+}
+
+/** 桥接启停、端口变化或启动失败时触发。 */
+export function onBridgeStatus(handler: (payload: BridgeStatus) => void): Promise<UnlistenFn> {
+  return listen<BridgeStatus>(EVENTS.bridgeStatus, (event) => handler(event.payload));
 }
 
 export function onRemoteLookupResult(
