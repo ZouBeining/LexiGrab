@@ -99,22 +99,24 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `tracing` | 0.1.41 | MIT | 日志 |
 | `tracing-subscriber` | 0.3.19 | MIT | 日志输出 |
 | `tracing-appender` | 0.2.3 | MIT | 文件日志滚动 |
-| `axum` | 0.8.1 | MIT | 本地桥接 |
-| `tower` | 0.5.2 | MIT | 中间件测试 |
-| `tower-http` | 0.6.2 | MIT | 请求体限制、CORS |
-| `subtle` | 2.6.1 | BSD-3-Clause | 令牌常量时间比较 |
+| `axum` | 0.8.9（`Cargo.toml` 声明 0.8.1，按 `^` 解析） | MIT | 本地桥接路由与请求体上限 |
 | `jsonpath-rust` | 1.0.6 | MIT | JSONPath |
 | `rquickjs` | 0.14.0 | MIT | 脚本沙箱 |
 | `rusqlite` | 0.32.1（`bundled`） | MIT | saved_cards 语境指纹（M2）；计划值 0.33 因 MSVC 构建环境锁到 0.32.1 |
-| `tokio-util` | 0.7.13 | MIT | 取消令牌 |
 | `windows` | 0.62.0 | MIT OR Apache-2.0 | Win32 API |
 | `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 | HWND 获取 |
+
+桥接的鉴权、CORS 与关停不引入额外依赖：常量时间比较、CORS 头与令牌桶在
+`src-tauri/src/bridge/{auth,server}.rs` 内实现，请求体上限用 axum 的
+`DefaultBodyLimit`，关停用 `tokio::sync::oneshot`。因此计划中的 `tower-http`
+（CORS/体积限制）、`subtle`（常量时间比较）、`tokio-util`（取消令牌）没有加入依赖表。
 
 测试专用：
 
 | crate | 锁定版本 | 许可证 | 用途 |
 | --- | --- | --- | --- |
 | `wiremock` | 0.6.2 | MIT OR Apache-2.0 | HTTP mock |
+| `tower` | 0.5.3 | MIT | `ServiceExt::oneshot` 直接测桥接路由 |
 | `http-body-util` | 0.1.2 | MIT | 响应体断言 |
 
 ## 6. 词典与脚本依赖

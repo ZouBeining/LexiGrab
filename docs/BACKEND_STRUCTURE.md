@@ -455,7 +455,8 @@ INTERNAL
 
 - `lookup_collect_all` 等待所有启用源，截止 3.5s，返回已收集结果与 `partial`。
 - 结果按 `max_entries_per_source` 与 `max_entries_total` 截断。
-- `sense_available` 为真时，扩展可轮询 `/v1/sense/{query_id}`；不阻塞首屏。
+- 返回值里的 `definition_html` 已剥离本地媒体（`[图片]`/`[音频]`/`[视频]`）并清空 `resources`：浏览器无法读取 `mdx-res`，扩展只展示文本与远程资源。
+- `sense_available` 为真时，扩展可轮询 `/v1/sense/{query_id}`；不阻塞首屏。为真时桌面端登记该 `query_id` 供后续查询。
 
 **GET /v1/sense/{query_id}**
 
@@ -477,6 +478,30 @@ INTERNAL
 
 返回 `{ "note_id": 12345, "exact_context_seen": false }`。定义 HTML 上限 512KB，服务端再次清洗并剥离本地媒体。`exact_context_seen` 只提示同词同句同释义，不影响写入。
 
+**错误响应**
+
+所有非 2xx 响应（含 401/403/413/429）都带 CORS 头，正文为：
+
+```json
+{ "code": "AUTH_FAILED", "message": "令牌缺失或错误，请在扩展设置中重新配对" }
+```
+
+| 状态码 | `code` | 触发条件 |
+| --- | --- | --- |
+| 400 | `INVALID_REQUEST` | `word` 为空或过长、`definition_html` 为空 |
+| 401 | `AUTH_FAILED` | 缺失或错误的 `X-Auth-Token` |
+| 403 | `ORIGIN_REJECTED` | Origin 存在但不是 `moz-extension://` |
+| 404 | `NOT_FOUND` | 未知端点，或 `/v1/sense` 的 query_id 未知/过期 |
+| 413 | `PAYLOAD_TOO_LARGE` | 请求体超 1MB，或定义 HTML 超 512KB |
+| 422 | `ANKI_FIELD_MISSING` | 模板缺少字段 |
+| 429 | `RATE_LIMITED` | 超过 20 次/秒（突发 40） |
+| 502 | `ANKI_API_ERROR` | AnkiConnect 返回错误 |
+| 503 | `ANKI_UNREACHABLE` | AnkiConnect 不可达 |
+| 504 | `TIMEOUT` | 单次处理超过 10s |
+| 500 | `INTERNAL` | 未归类错误，细节只进日志 |
+
+`message` 是中文短句，不含堆栈、令牌或完整选中文本。
+
 ### 5.3 鉴权与安全
 
 - 只绑定 `127.0.0.1`，禁止 `0.0.0.0`、`[::]` 或局域网地址。
@@ -488,6 +513,26 @@ INTERNAL
 - 请求体上限 1MB，限流 20 次/秒、突发 40。
 - 不信任 `X-Forwarded-For` 等代理头。
 - 日志不记录令牌、完整 URL、完整选中文本。
+
+### 5.4 运行时状态
+
+`BridgeStatus` 同时用于 `get_bridge_status` 与 `bridge://status`：
+
+```ts
+interface BridgeStatus {
+  enabled: boolean;            // 配置是否启用
+  running: boolean;            // 监听是否真的起来了
+  port: number;                // 运行中为实际端口，失败时为期望端口
+  url: string;                 // http://127.0.0.1:<port>
+  api_version: number;         // 固定 1
+  last_success_ms: number | null;
+  error: string | null;        // 端口占用等启动失败原因
+}
+```
+
+- 令牌轮换通过 `regenerate_bridge_token` 写配置，下一次请求即用新令牌，无需重启监听。
+- 端口或启用状态变化由 `update_settings` 触发重启；绑定失败只更新 `error`，不改写已保存的端口。
+- 服务只随应用运行，退出时关闭监听。
 
 ## 6. AnkiConnect
 

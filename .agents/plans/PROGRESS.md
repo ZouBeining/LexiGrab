@@ -33,6 +33,14 @@
   - 用 uv 管理的 Python + pywinauto 驱动真实应用跑完 9 项矩阵（源管理、划词/焦点、真实 Anki 制卡、托盘/单实例、mdx-res 渲染、时延），脚本与产物在 [.agents/automation/m2-manual](../../automation/m2-manual/)，结论写入 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
   - 时延：弹窗可见 p95 84.3ms；首结果 p95 296.4ms；41MB 词典加载中导航 137ms。真实 Anki 26.9.3 落库字段/标签核对通过。
   - 新发现 3 个待修复项（已于 2026-11-15 修复，见下）：mdx-res 图片在弹窗内破图、同语境提示对含本地媒体释义失效、托盘图标无 tooltip/可访问名称。
+- **M3 Firefox 扩展与本地桥接（2026-11-15）**：
+  - 桥接：`src-tauri/src/bridge/{mod,auth,dto,error,server}.rs`，axum 只绑定 `127.0.0.1`；守卫中间件按“预检→Origin→令牌桶→`X-Auth-Token` 常量时间比较”顺序，并给所有响应（含 401/403/413/429）补 CORS。请求体 1MB、20 次/秒突发 40、处理 10s 超时。
+  - 端点：`GET /v1/health`、`POST /v1/selection`（并发本地源 3.5s 截止、`partial`、剥离本地媒体）、`GET /v1/sense/{query_id}`（disabled 200 / pending 202 / 未知 404）、`POST /v1/anki`（`exact_context_seen`）。
+  - 生命周期：`BridgeService` 随配置启停，端口占用状态 failed 不静默换端口；`get_bridge_status`、`regenerate_bridge_token`（旧令牌立即 401）；`update_settings` 变更端口/开关即重启。
+  - 设置页：`ExtensionSection.tsx` 的启用、端口、状态与最近请求、令牌显示/复制/二次确认轮换、配对三步。
+  - 扩展：`extension/` 使用 WXT 0.21.5 + React 19 + Tailwind 4；`lib/sentence.ts` 纯函数句子提取（Intl.Segmenter 优先、标点回退、隐藏元素与密码框过滤），`lib/bridge.ts` 固定错误码客户端，Shadow DOM 浮动按钮 + 360×480 结果气泡（DOMPurify 二次清洗、语境轮询、同词连续保存不阻断），options 页配对与测试连接。
+  - 产物：`pnpm -C extension build:firefox` + `web-ext lint`（0 error / 7 warning）+ `web-ext build` 生成未签名 `lexigrab-firefox-0.1.0.xpi`（sha256 见报告）。
+  - 报告：[M3-extension-verification](../notes/M3-extension-verification.md)；Rust 228 项、扩展 34 项、前端 81 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
 - **M2 验收缺陷修复（2026-11-15）**：
   - `mdx-res` 破图：Wry 在 Windows 把 `http://mdx-res.localhost/{id}/...` 还原为 `mdx-res://localhost/{id}/...` 再交给协议处理器，`localhost` 被误读为 dict_id。`core/resources.rs` 跳过该 authority，并补 `mdx-res://localhost/...` 解析与端到端测试；`p5` 复跑 `apple` 正常显示 Fruit 插图。
   - 同语境提示失效：预检与导出统一走 `anki::export::context_definition_text`（先剥离本地媒体再转纯文本），含图片/音频的释义第二次保存会命中已存语境；`card_tests` 覆盖预检与落库指纹一致。
@@ -42,24 +50,28 @@
 ## 进行中
 
 - M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入 M0 报告第 6 节。
+- M3 收尾：本机未安装 Firefox，`.xpi` 安装、重启保留与真实站点划词/制卡需在 Developer Edition/Nightly 手工补测，步骤见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 4、5 节。
 - CI 文件已提交，GitHub Actions 尚未实跑。
 
 ## 接下来
 
-1. 进入 [PLAN_M3.md](PLAN_M3.md)：Firefox 扩展、本地桥接（令牌/Origin/限流）、扩展配对与气泡。
-2. M2 验收缺陷已修复并复验：`p5` 已复跑通过（划词 + 弹窗内 `mdx-res` 图片渲染），托盘可访问名称经 UIA 实测为 `LexiGrab`；含媒体释义的同语境指纹由 `card_tests` 覆盖（未重跑会写真实 Anki 的 `p3`）。
+1. 进入 [PLAN_M4.md](PLAN_M4.md)：远程源、查询缓存、语境辅助（选择器/LLM）与桌面端 UI 接入。
+2. M4 复用 M3 的桥接协议：`lookup_collect_all`、`/v1/sense` 已完成占位（disabled/pending），M4 只需在 `AppState::resolve_sense` 写入 `SenseResolution`，扩展无需改端点。
+3. M3 遗留手工项（Firefox 真机）在 M4 期间一并验收。
 
-## 代码影响检查（M2 已落地，M3/M4 仍需改）
+## 代码影响检查（M3 已落地，M4 仍需改）
 
-- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 扩展为应用状态中心。M4 在这里接 `EventSink` 远程事件与缓存。
+- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 扩展为应用状态中心；M3 在 `state` 加 `lookup_collect_all` 与语境查询环形缓存（`mark_sense_pending`/`resolve_sense`），`registry` 加 `enabled_source_handles`。M4 在这里接 `EventSink` 远程事件与缓存。
+- `src-tauri/src/bridge/`：M3 新增；M4 只需让 `/v1/sense` 返回 `SenseResolution`，不改路由与鉴权。
 - `src-tauri/src/db/`：M2 新增 `saved_cards` + 指纹；M4 加 `lookup_cache`/`sense_cache` 与清理命令。
 - `src-tauri/src/anki/export.rs`：M2 新增导出（剥离媒体、同语境检查）；M4 追加 AI 标签与 `AI · <model>` 来源。
-- `src-tauri/src/commands.rs`、`lib.rs`、`shortcut.rs`、`window.rs`：M2 定型命令表与生命周期；M3 加桥接命令，M4 加语境命令。
-- `src/lib/{types,ipc,events,resource,format}.ts`：M2 定稿 DTO 与事件；M4 增远程/语境类型。`src/components` 为共享原语。
-- `src/windows/{popup,manager,settings}`：M2 已实现；M4 在设置页填语境辅助/缓存，在弹窗填推荐条/AI 卡。
-- 扩展目录尚不存在；M3 实现 Firefox 扩展与桥接轮询。
+- `src-tauri/src/commands.rs`、`lib.rs`、`shortcut.rs`、`window.rs`：M2 定型命令表与生命周期，M3 加桥接命令（`get_bridge_status`、`regenerate_bridge_token`）与 `BridgeService` 管理；M4 加语境命令。
+- `src/lib/{types,ipc,events}.ts`：M2 定稿 DTO 与事件，M3 加 `BridgeStatus` 与 `bridge://status`；M4 增远程/语境类型。`src/components` 为共享原语。
+- `src/windows/{popup,manager,settings}`：M2 已实现，M3 填完设置页“浏览器扩展”分区；M4 在设置页填语境辅助/缓存，在弹窗填推荐条/AI 卡。
+- `extension/`：M3 新增完整 WXT 工程；M4/M5 只在 options 文案与发布流程上调整，不改桥接端点。
 - 数据库已有 `saved_cards`；M4 加 `lookup_cache`、`sense_cache` 表与迁移。
-- `src-tauri/tauri.conf.json`/`capabilities/default.json`：M3 加桥接相关权限时同步更新。
+- `src-tauri/tauri.conf.json`/`capabilities/default.json`：桥接是进程内 axum，不新增 Tauri 权限，M3 未改动两文件。
+
 
 ## 已知问题与阻塞
 
@@ -69,6 +81,9 @@
 - 本机 MSVC 编译 `aws-lc-sys`（rustls 默认后端）失败（cl D8050）；reqwest 改 `native-tls`（Schannel）。
 - 本机 MSVC 14.51 编译 bundled SQLite（`libsqlite3-sys`）的 C 代码同样报 `D8050`；`src-tauri/Cargo.toml` 设 `[profile.dev] debug = 0` 规避，Rust 侧回溯仍可用。若换机器可去掉该限制。
 - **依赖偏差**：`rusqlite` 实际锁定 `0.32.1`（`bundled`），计划为 `0.33`；契约行为一致，记录在 [TECH_STACK](../../docs/TECH_STACK.md) 第 5 节。
+- **依赖偏差（M3）**：`axum` 解析到 `0.8.9`（声明 0.8.1）；桥接未引入计划中的 `tower-http`/`subtle`/`tokio-util`：CORS、令牌桶与常量时间比较手写在 `bridge/`，请求体上限用 axum `DefaultBodyLimit`，关停用 `tokio::sync::oneshot`。记录在 TECH_STACK 第 5 节。
+- **本机无 Firefox**：M3 的 `.xpi` 安装、重启保留与真实站点划词/制卡未能在本机验证；`.xpi`、sha256、安装步骤与 `web-ext lint` 结果已记录在 [M3-extension-verification](../notes/M3-extension-verification.md)。
+- `web-ext lint` 对扩展有 7 条 warning（0 error）：AMO 2025-11 的 `data_collection_permissions` 声明（自托管未签名分发不适用，且补键会与 `strict_min_version=109.0` 冲突）与 React/DOMPurify 打包产物里的 `innerHTML`。
 - M2 手工矩阵已用 pywinauto 自动化补测（结论见 M2-acceptance 第 3 节）；自动测试、CLI 回归与启动冒烟此前已过。
 - 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可访问 GitHub。
 - pnpm 11 在 Windows 默认 junction 布局会让 ESLint 解析不到传递依赖；仓库用 `pnpm-workspace.yaml` 的 `nodeLinker: hoisted` 规避。
@@ -93,3 +108,7 @@
 - 弹窗编辑不新增第四窗口：同一 popup 窗口在快速/编辑两态间切换，尺寸由后端切换。
 - 词典内链接统一交系统浏览器，WebView 不导航；语法高亮/外部工具不上前。
 - 同语境提示可被“仍然保存”覆盖；Anki 永远允许重复，应用层不阻断不同语境。
+- 桥接用 axum 在应用进程内监听 `127.0.0.1`，随配置启停；端口占用只进状态不换端口；令牌每次请求现读配置，轮换无需重启。
+- 扩展的 content script 不直接 fetch：网络请求与令牌只在 background；气泡渲染在 Shadow DOM，释义用 DOMPurify 二次清洗。
+- `/v1/selection` 返回的释义先剥离本地媒体再给扩展，浏览器无法访问 `mdx-res`。
+- 扩展句子提取优先 `Intl.Segmenter`，缺失时按中英文标点回退；块文本 ≤300 字符直接用整块，避免过度切分。
