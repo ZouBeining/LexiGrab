@@ -1,0 +1,77 @@
+/*
+ * content script 的样式全部注入 Shadow Root，页面 CSS 影响不到气泡。
+ * 语义 token 与桌面端一致（docs/FRONTEND_GUIDELINES.md 第 2 节），默认 figma 浅色。
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f7f7f5;
+  --color-ink: #000000;
+  --color-ink-muted: #7a7a7a;
+  --color-hairline: #e6e6e6;
+  --color-accent: #000000;
+  --color-on-accent: #ffffff;
+  --color-block-1: #dceeb1;
+  --color-success: #1ea64a;
+  --color-danger: #cf2d56;
+  --font-sans: Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:host {
+  all: initial;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.lg-interactive {
+  pointer-events: auto;
+}
+
+.lg-definition {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.lg-definition p {
+  margin: 0 0 6px;
+}
+
+.lg-definition ul,
+.lg-definition ol {
+  margin: 4px 0;
+  padding-left: 18px;
+  list-style: revert;
+}
+
+.lg-definition li {
+  margin: 2px 0;
+}
+
+.lg-definition a {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.lg-definition img {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
