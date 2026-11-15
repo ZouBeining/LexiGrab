@@ -1,3 +1,7 @@
 # pnpm 11 的仓库设置放在 pnpm-workspace.yaml。
 # nodeLinker=hoisted：Windows 上避免 junction 布局导致 ESLint 等工具解析不到传递依赖。
 nodeLinker: hoisted
+
+# Firefox 扩展是独立包，与桌面端共用根锁文件。
+packages:
+  - "extension"

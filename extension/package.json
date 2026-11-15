@@ -1,0 +1,35 @@
+{
+  "name": "lexigrab-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "displayName": "LexiGrab",
+  "scripts": {
+    "dev": "wxt -b firefox",
+    "build:firefox": "wxt build -b firefox",
+    "lint:firefox": "web-ext lint --source-dir .output/firefox-mv2 --self-hosted",
+    "package:firefox": "web-ext build --source-dir .output/firefox-mv2 --artifacts-dir dist --overwrite-dest --filename \"lexigrab-firefox-{version}.xpi\"",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "vitest run",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "dompurify": "3.4.17",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@wxt-dev/module-react": "1.2.2",
+    "happy-dom": "21.0.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5",
+    "web-ext": "10.8.0",
+    "wxt": "0.21.5"
+  }
+}
