@@ -36,6 +36,23 @@
   pointer-events: auto;
 }
 
+/*
+ * Tailwind 4 把 --tw-border-style / --tw-shadow 的默认值放在 @property 与
+ * @supports 保护块里。Firefox 的 Shadow DOM 不应用这些注册，导致 `border`、
+ * `shadow-*` 工具类在气泡里失效（实机验收发现）。这里在浮层作用域内补齐，
+ * 每层元素都直接声明，避免依赖 inherits:false 的继承。
+ */
+.lg-interactive,
+.lg-interactive *,
+.lg-interactive *::before,
+.lg-interactive *::after {
+  --tw-border-style: solid;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
 .lg-definition {
   font-size: 13px;
   line-height: 1.6;
