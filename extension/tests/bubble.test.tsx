@@ -161,6 +161,23 @@ describe("Bubble", () => {
     expect(text).toContain("此前已保存过");
   });
 
+  it("保存失败时按 ANKI_UNREACHABLE 给出可操作提示", async () => {
+    const send = vi.fn(async (request: RuntimeRequest) => {
+      if (request.type === "lexigrab:selection") return selectionResult();
+      throw { code: "ANKI_UNREACHABLE", message: "Anki 未运行或 AnkiConnect 未安装" };
+    });
+    renderBubble(send);
+    await flush();
+    act(() => {
+      screen.getByRole("button", { name: "保存所选义项" }).click();
+    });
+    await flush();
+    const text = screen.getByRole("dialog").textContent ?? "";
+    expect(text).toContain("Anki 未连接");
+    expect(text).toContain("启动 Anki");
+    expect(text).toContain("ANKI_UNREACHABLE");
+  });
+
   it("语境轮询 pending 不干扰展示，完成后显示 AI 释义", async () => {
     vi.useFakeTimers();
     let senseAttempts = 0;

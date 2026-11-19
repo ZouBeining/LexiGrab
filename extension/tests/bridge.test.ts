@@ -95,6 +95,23 @@ describe("createBridgeClient", () => {
     expect(error).toMatchObject({ code: "SERVER_ERROR", message: "桌面端内部错误", status: 500 });
   });
 
+  it.each([
+    [503, "ANKI_UNREACHABLE", "Anki 未运行或 AnkiConnect 未安装"],
+    [422, "ANKI_FIELD_MISSING", "Anki 模板缺少字段: Nope"],
+    [502, "ANKI_API_ERROR", "AnkiConnect 返回错误"],
+    [429, "RATE_LIMITED", "请求过于频繁"],
+    [413, "PAYLOAD_TOO_LARGE", "请求体过大"],
+    [400, "INVALID_REQUEST", "word 为空"],
+  ])("HTTP %s 透出服务端错误码 %s", async (status, code, message) => {
+    const { client } = clientWith(() => jsonResponse({ code, message }, status));
+    await expect(client.health()).rejects.toMatchObject({ code, message, status });
+  });
+
+  it("未知服务端错误码回落到 SERVER_ERROR", async () => {
+    const { client } = clientWith(() => jsonResponse({ code: "NOT_FOUND", message: "未知" }, 404));
+    await expect(client.health()).rejects.toMatchObject({ code: "SERVER_ERROR", status: 404 });
+  });
+
   it("非法 JSON 映射为 INVALID_RESPONSE", async () => {
     const { client } = clientWith(() => new Response("not json", { status: 200 }));
     await expect(client.health()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });

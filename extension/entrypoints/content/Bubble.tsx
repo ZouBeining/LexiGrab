@@ -53,6 +53,22 @@ const ERROR_COPY: Record<string, { title: string; action: string }> = {
   TIMEOUT: { title: "请求超时", action: "重试一次；词典可能正在加载。" },
   SERVER_ERROR: { title: "桌面端处理失败", action: "稍后重试，或查看桌面端日志。" },
   INVALID_RESPONSE: { title: "响应无法解析", action: "确认扩展与桌面端版本一致。" },
+  ANKI_UNREACHABLE: {
+    title: "Anki 未连接",
+    action: "启动 Anki 并确认 AnkiConnect 已安装，然后重试保存。",
+  },
+  ANKI_API_ERROR: { title: "Anki 返回错误", action: "查看桌面端日志后重试。" },
+  ANKI_FIELD_MISSING: {
+    title: "卡片模板缺少字段",
+    action: "在桌面端设置里核对字段映射，或修改 Anki 模板。",
+  },
+  ANKI_DUPLICATE: {
+    title: "Anki 拒绝重复卡片",
+    action: "确认 AnkiConnect 允许重复；应用已始终请求 allowDuplicate。",
+  },
+  RATE_LIMITED: { title: "请求过于频繁", action: "稍等一秒再试。" },
+  PAYLOAD_TOO_LARGE: { title: "内容过大", action: "缩短释义或换一个义项再保存。" },
+  INVALID_REQUEST: { title: "请求不完整", action: "重新划词后再试一次。" },
 };
 
 function toFailure(cause: unknown): Failure {
@@ -205,6 +221,7 @@ export function Bubble({ snapshot, position, send, onClose }: BubbleProps) {
   const recommendedConfidence = confidenceText(sense?.confidence ?? null);
   const aiDefinition = sense?.ai ?? null;
   const errorCopy = error ? (ERROR_COPY[error.code] ?? ERROR_COPY.SERVER_ERROR) : null;
+  const saveErrorCopy = saveError ? (ERROR_COPY[saveError.code] ?? ERROR_COPY.SERVER_ERROR) : null;
 
   return (
     <div
@@ -335,7 +352,10 @@ export function Bubble({ snapshot, position, send, onClose }: BubbleProps) {
 
         {saveError ? (
           <div role="alert" className="mt-3 rounded-xl border border-danger/40 px-3 py-2">
-            <p className="text-xs font-medium text-danger">保存失败</p>
+            <p className="text-xs font-medium text-danger">
+              {saveErrorCopy?.title ?? "保存失败"}
+            </p>
+            <p className="mt-0.5 text-[11px] text-ink-muted">{saveErrorCopy?.action}</p>
             <p className="mt-0.5 text-[11px] text-ink-muted">{saveError.message}</p>
             <p className="mt-0.5 font-mono text-[10px] text-ink-muted">{saveError.code}</p>
           </div>

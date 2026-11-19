@@ -18,7 +18,28 @@ export type BridgeErrorCode =
   | "ORIGIN_REJECTED"
   | "TIMEOUT"
   | "SERVER_ERROR"
-  | "INVALID_RESPONSE";
+  | "INVALID_RESPONSE"
+  | "ANKI_UNREACHABLE"
+  | "ANKI_API_ERROR"
+  | "ANKI_FIELD_MISSING"
+  | "ANKI_DUPLICATE"
+  | "RATE_LIMITED"
+  | "PAYLOAD_TOO_LARGE"
+  | "INVALID_REQUEST";
+
+/**
+ * 桌面端桥接正文里可以原样透出给用户的错误码（BACKEND_STRUCTURE §5.2）。
+ * 其余服务端码（INTERNAL/NOT_FOUND 等）沿用通用的 `SERVER_ERROR`。
+ */
+const PASSTHROUGH_CODES: ReadonlySet<string> = new Set<BridgeErrorCode>([
+  "ANKI_UNREACHABLE",
+  "ANKI_API_ERROR",
+  "ANKI_FIELD_MISSING",
+  "ANKI_DUPLICATE",
+  "RATE_LIMITED",
+  "PAYLOAD_TOO_LARGE",
+  "INVALID_REQUEST",
+]);
 
 export class BridgeError extends Error {
   readonly code: BridgeErrorCode;
@@ -181,8 +202,11 @@ export function createBridgeClient(options: BridgeClientOptions): BridgeClient {
       return { status: 202, json: async () => ({ status: "pending" }) };
     }
     if (!response.ok) {
-      const detail = await readErrorMessage(response);
-      throw new BridgeError("SERVER_ERROR", detail, response.status);
+      const detail = await readErrorDetail(response);
+      const code = PASSTHROUGH_CODES.has(detail.code)
+        ? (detail.code as BridgeErrorCode)
+        : "SERVER_ERROR";
+      throw new BridgeError(code, detail.message, response.status);
     }
     return {
       status: response.status,
@@ -238,15 +262,19 @@ export function createBridgeClient(options: BridgeClientOptions): BridgeClient {
   };
 }
 
-/** 读取错误正文里的 `message`；正文不可读时给状态码。 */
-async function readErrorMessage(response: Response): Promise<string> {
+/** 读取错误正文里的 `code`/`message`；正文不可读时给状态码文案。 */
+async function readErrorDetail(response: Response): Promise<{ code: string; message: string }> {
   try {
-    const body = (await response.json()) as { message?: unknown };
-    if (typeof body.message === "string" && body.message.length > 0) {
-      return body.message;
-    }
+    const body = (await response.json()) as { code?: unknown; message?: unknown };
+    return {
+      code: typeof body.code === "string" ? body.code : "",
+      message:
+        typeof body.message === "string" && body.message.length > 0
+          ? body.message
+          : `桌面端返回错误（HTTP ${response.status}）`,
+    };
   } catch {
     // 落到状态码文案。
   }
-  return `桌面端返回错误（HTTP ${response.status}）`;
+  return { code: "", message: `桌面端返回错误（HTTP ${response.status}）` };
 }
