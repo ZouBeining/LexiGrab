@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-11-15。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-11-19。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -41,6 +41,11 @@
   - 扩展：`extension/` 使用 WXT 0.21.5 + React 19 + Tailwind 4；`lib/sentence.ts` 纯函数句子提取（Intl.Segmenter 优先、标点回退、隐藏元素与密码框过滤），`lib/bridge.ts` 固定错误码客户端，Shadow DOM 浮动按钮 + 360×480 结果气泡（DOMPurify 二次清洗、语境轮询、同词连续保存不阻断），options 页配对与测试连接。
   - 产物：`pnpm -C extension build:firefox` + `web-ext lint`（0 error / 7 warning）+ `web-ext build` 生成未签名 `lexigrab-firefox-0.1.0.xpi`（sha256 见报告）。
   - 报告：[M3-extension-verification](../notes/M3-extension-verification.md)；Rust 228 项、扩展 34 项、前端 81 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
+- **M3 Firefox 真机验收（2026-11-19）**：
+  - 本机 Firefox Developer Edition 161.0（`D:\Firefox Developer Edition`）完成 29/29 场景：未签名 `.xpi` 安装、选项页配对、真实划词→查询→Anki 制卡、同词同句/不同句、中文页、Anki 关闭与重试、令牌轮换、重启保留、Wikipedia 英/中与 BBC 各 3 次划词、端口冲突、桥接鉴权/CORS。
+  - 自动化在 [.agents/automation/m3-firefox](../../automation/m3-firefox/)：自带 Marionette 客户端（无 geckodriver/selenium）+ 真实桌面端/Anki/testpage，`python -u run.py` 输出 `artifacts/results.json` 与截图；环境与结果见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 5 节。
+  - 修复真机发现的问题：扩展非 2xx 一律映射 `SERVER_ERROR`，现透出 `ANKI_UNREACHABLE` 等服务端错误码并在保存失败时显示标题/建议动作（扩展测试 34 → 42）；Tailwind 4 的 `@property` 默认值在 Firefox Shadow DOM 内不生效导致气泡无边框/阴影，`content/style.css` 在浮层作用域补齐 `--tw-border-style`/`--tw-*shadow`。
+  - 产物更新：`lexigrab-firefox-0.1.0.xpi`（167,848 字节，sha256 `CBCD1245…3B362`），`web-ext lint` 仍为 0 error / 7 warning。
 - **M2 验收缺陷修复（2026-11-15）**：
   - `mdx-res` 破图：Wry 在 Windows 把 `http://mdx-res.localhost/{id}/...` 还原为 `mdx-res://localhost/{id}/...` 再交给协议处理器，`localhost` 被误读为 dict_id。`core/resources.rs` 跳过该 authority，并补 `mdx-res://localhost/...` 解析与端到端测试；`p5` 复跑 `apple` 正常显示 Fruit 插图。
   - 同语境提示失效：预检与导出统一走 `anki::export::context_definition_text`（先剥离本地媒体再转纯文本），含图片/音频的释义第二次保存会命中已存语境；`card_tests` 覆盖预检与落库指纹一致。
@@ -50,14 +55,12 @@
 ## 进行中
 
 - M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入 M0 报告第 6 节。
-- M3 收尾：本机未安装 Firefox，`.xpi` 安装、重启保留与真实站点划词/制卡需在 Developer Edition/Nightly 手工补测，步骤见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 4、5 节。
 - CI 文件已提交，GitHub Actions 尚未实跑。
 
 ## 接下来
 
 1. 进入 [PLAN_M4.md](PLAN_M4.md)：远程源、查询缓存、语境辅助（选择器/LLM）与桌面端 UI 接入。
 2. M4 复用 M3 的桥接协议：`lookup_collect_all`、`/v1/sense` 已完成占位（disabled/pending），M4 只需在 `AppState::resolve_sense` 写入 `SenseResolution`，扩展无需改端点。
-3. M3 遗留手工项（Firefox 真机）在 M4 期间一并验收。
 
 ## 代码影响检查（M3 已落地，M4 仍需改）
 
@@ -82,7 +85,8 @@
 - 本机 MSVC 14.51 编译 bundled SQLite（`libsqlite3-sys`）的 C 代码同样报 `D8050`；`src-tauri/Cargo.toml` 设 `[profile.dev] debug = 0` 规避，Rust 侧回溯仍可用。若换机器可去掉该限制。
 - **依赖偏差**：`rusqlite` 实际锁定 `0.32.1`（`bundled`），计划为 `0.33`；契约行为一致，记录在 [TECH_STACK](../../docs/TECH_STACK.md) 第 5 节。
 - **依赖偏差（M3）**：`axum` 解析到 `0.8.9`（声明 0.8.1）；桥接未引入计划中的 `tower-http`/`subtle`/`tokio-util`：CORS、令牌桶与常量时间比较手写在 `bridge/`，请求体上限用 axum `DefaultBodyLimit`，关停用 `tokio::sync::oneshot`。记录在 TECH_STACK 第 5 节。
-- **本机无 Firefox**：M3 的 `.xpi` 安装、重启保留与真实站点划词/制卡未能在本机验证；`.xpi`、sha256、安装步骤与 `web-ext lint` 结果已记录在 [M3-extension-verification](../notes/M3-extension-verification.md)。
+- M3 真机验收已于 2026-11-19 在 Firefox Developer Edition 161.0 完成（29/29）；本机浏览器访问境外站点需走系统代理。`.xpi`、sha256、安装步骤与 `web-ext lint` 结果见 [M3-extension-verification](../notes/M3-extension-verification.md)。
+- 本轮修复的扩展问题（2026-11-19）：桥接非 2xx 错误码被统一成 `SERVER_ERROR`（现白名单透出）；Tailwind `@property` 默认值在 Firefox Shadow DOM 内不生效，导致气泡缺边框/阴影。详见 M3 报告 §5.3。
 - `web-ext lint` 对扩展有 7 条 warning（0 error）：AMO 2025-11 的 `data_collection_permissions` 声明（自托管未签名分发不适用，且补键会与 `strict_min_version=109.0` 冲突）与 React/DOMPurify 打包产物里的 `innerHTML`。
 - M2 手工矩阵已用 pywinauto 自动化补测（结论见 M2-acceptance 第 3 节）；自动测试、CLI 回归与启动冒烟此前已过。
 - 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可访问 GitHub。
@@ -112,3 +116,5 @@
 - 扩展的 content script 不直接 fetch：网络请求与令牌只在 background；气泡渲染在 Shadow DOM，释义用 DOMPurify 二次清洗。
 - `/v1/selection` 返回的释义先剥离本地媒体再给扩展，浏览器无法访问 `mdx-res`。
 - 扩展句子提取优先 `Intl.Segmenter`，缺失时按中英文标点回退；块文本 ≤300 字符直接用整块，避免过度切分。
+- 扩展按 BACKEND_STRUCTURE §5.2 白名单透出桥接错误码（Anki/限流/体积/请求类），未知码回落 `SERVER_ERROR`；保存失败同时显示标题、建议动作、服务端文案与码。
+- content script 的 Tailwind 浮层在 `.lg-interactive` 作用域自行声明 `--tw-border-style`/`--tw-*shadow` 默认值，规避 Firefox Shadow DOM 不应用 `@property` 的问题。
