@@ -12,9 +12,10 @@ use serde::Serialize;
 use crate::core::config::{ConfigStore, Paths, Settings};
 use crate::core::entry::Entry;
 use crate::core::error::IpcResult;
-use crate::core::query_router::QueryRouter;
+use crate::core::query_router::{CachedSource, LookupOutcome, QueryRouter, RemoteJob};
 use crate::core::registry::{SourceRegistry, SourceStateEntry};
 use crate::core::runtime::EventSink;
+use crate::db::cache::CacheStore;
 use crate::db::CardStore;
 use crate::platform::{CaptureMethod, CaptureResult, SelectionContext};
 
@@ -74,13 +75,7 @@ pub struct RuntimeStatus {
     pub sources_ready: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CachedSource {
-    pub source_id: String,
-    pub source_name: String,
-}
-
-/// `get_query_meta` 的返回结构，M2 还没有远程源与缓存命中。
+/// `get_query_meta` 的返回结构：本次查询命中的缓存来源与仍在执行的远程任务数。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct QueryMeta {
     pub query_id: String,
@@ -94,6 +89,7 @@ pub struct AppState {
     settings: RwLock<Settings>,
     registry: RwLock<SourceRegistry>,
     cards: Arc<CardStore>,
+    cache: Arc<CacheStore>,
     hotkey: RwLock<HotkeyStatus>,
     last_capture: Mutex<Option<CaptureResult>>,
     samples: Mutex<Vec<CaptureSample>>,
@@ -140,6 +136,18 @@ impl AppState {
             }
         };
 
+        let cache = match CacheStore::open(&paths.cache_db) {
+            Ok(store) => store,
+            Err(error) => {
+                tracing::warn!(error = %error, path = %paths.cache_db.display(), "打开查询缓存失败，改用内存缓存");
+                CacheStore::in_memory().map_err(|fallback| {
+                    crate::core::error::IpcError::internal(format!(
+                        "无法打开查询缓存: {error}; 内存缓存也不可用: {fallback}"
+                    ))
+                })?
+            }
+        };
+
         let registry = SourceRegistry::empty();
         let accelerator = settings.general.hotkey.clone();
         Ok(Self {
@@ -148,6 +156,7 @@ impl AppState {
             settings: RwLock::new(settings),
             registry: RwLock::new(registry),
             cards: Arc::new(cards),
+            cache: Arc::new(cache),
             hotkey: RwLock::new(HotkeyStatus {
                 accelerator,
                 registered: false,
@@ -215,6 +224,11 @@ impl AppState {
         Arc::clone(&self.cards)
     }
 
+    /// 查询缓存；设置页统计与语境辅助共用。
+    pub fn cache(&self) -> Arc<CacheStore> {
+        Arc::clone(&self.cache)
+    }
+
     /// 同步查询；调用方用 `spawn_blocking` 包住。查询结果会写入 QueryMeta 环形缓存。
     pub fn lookup(
         &self,
@@ -223,6 +237,19 @@ impl AppState {
         query_id: &str,
         sink: &dyn EventSink,
     ) -> IpcResult<Vec<Entry>> {
+        Ok(self
+            .lookup_planned(query, source_ids, query_id, sink)?
+            .entries)
+    }
+
+    /// 同步查询并返回待后台执行的远程任务。
+    pub fn lookup_planned(
+        &self,
+        query: &str,
+        source_ids: Option<&[String]>,
+        query_id: &str,
+        sink: &dyn EventSink,
+    ) -> IpcResult<LookupOutcome> {
         let query = query.trim();
         if query.is_empty() {
             return Err(crate::core::error::IpcError::new(
@@ -231,15 +258,55 @@ impl AppState {
             ));
         }
         let settings = self.settings();
-        let registry = read(&self.registry);
-        let entries = QueryRouter::new(&registry, &settings).lookup(query, source_ids, sink)?;
-        drop(registry);
+        let outcome = {
+            let registry = read(&self.registry);
+            QueryRouter::new(&registry, &settings)
+                .with_cache(&self.cache)
+                .lookup_planned(query, source_ids, query_id, sink)?
+        };
         self.record_query_meta(QueryMeta {
             query_id: query_id.to_string(),
-            cached_sources: Vec::new(),
-            pending_remote: 0,
+            cached_sources: outcome.cached_sources.clone(),
+            pending_remote: outcome.remote_jobs.len() as u32,
         });
-        Ok(entries)
+        Ok(outcome)
+    }
+
+    /// 远程任务完成（成功或失败）后递减 pending，并记录新命中的缓存来源。
+    pub fn complete_remote(&self, query_id: &str, cached_source: Option<CachedSource>) {
+        let mut ring = lock(&self.query_meta);
+        let Some(meta) = ring.iter_mut().find(|meta| meta.query_id == query_id) else {
+            return;
+        };
+        meta.pending_remote = meta.pending_remote.saturating_sub(1);
+        if let Some(cached) = cached_source {
+            if !meta
+                .cached_sources
+                .iter()
+                .any(|existing| existing.source_id == cached.source_id)
+            {
+                meta.cached_sources.push(cached);
+            }
+        }
+    }
+
+    /// 执行一个远程任务并广播事件；命令层放到后台线程调用。
+    pub fn run_remote_job(
+        &self,
+        job: &RemoteJob,
+        query: &str,
+        query_id: &str,
+        sink: &dyn EventSink,
+    ) {
+        let settings = self.settings();
+        let mut outcome = LookupOutcome::default();
+        {
+            let registry = read(&self.registry);
+            QueryRouter::new(&registry, &settings)
+                .with_cache(&self.cache)
+                .run_remote_job(job, query, query_id, &mut outcome, sink);
+        }
+        self.complete_remote(query_id, None);
     }
 
     fn record_query_meta(&self, meta: QueryMeta) {
@@ -274,11 +341,31 @@ impl AppState {
         let expected = sources.len();
         let per_source = settings.general.max_entries_per_source as usize;
         let total = settings.general.max_entries_total as usize;
+        let positive_ttl = i64::from(settings.cache.ttl_hours) * 3600;
+        let negative_ttl = i64::from(settings.cache.negative_ttl_minutes) * 60;
         for source in sources {
             let sender = sender.clone();
             let query = query.to_string();
+            let cache = Arc::clone(&self.cache);
+            let remote = source.is_remote();
             std::thread::spawn(move || {
+                if remote {
+                    if let Ok(Some(hit)) = cache.get(source.id(), &query) {
+                        // 负缓存命中也算一个结果（空），让桥接走 partial 逻辑。
+                        let _ = sender.send((source.name().to_string(), Ok(hit.entries)));
+                        return;
+                    }
+                }
                 let result = source.lookup(&query);
+                if remote {
+                    if let Ok(entries) = &result {
+                        if entries.is_empty() {
+                            let _ = cache.put_empty(source.id(), &query, negative_ttl);
+                        } else {
+                            let _ = cache.put_entries(source.id(), &query, entries, positive_ttl);
+                        }
+                    }
+                }
                 let _ = sender.send((source.name().to_string(), result));
             });
         }
@@ -338,6 +425,45 @@ impl AppState {
     /// 写入已完成的语境结果（M4 使用）。
     pub fn resolve_sense(&self, query_id: &str, payload: serde_json::Value) {
         self.set_sense_state(query_id, SenseQueryState::Resolved(payload));
+    }
+
+    /// 后台解析语境推荐：选择器 →（低置信度时）LLM，结果只作为建议。
+    pub fn run_sense_resolution(
+        &self,
+        query_id: &str,
+        headword: &str,
+        sentence: Option<&str>,
+        entries: &[Entry],
+    ) -> crate::core::sense::SenseResolution {
+        let settings = self.settings();
+        crate::core::sense::resolve(crate::core::sense::SenseInput {
+            query_id,
+            headword,
+            sentence,
+            entries,
+            settings: &settings,
+            cache: &self.cache,
+        })
+    }
+
+    /// 把语境结果写成事件/桥接共用的 JSON；失败只记录日志。
+    pub fn store_sense_resolution(
+        &self,
+        query_id: &str,
+        resolution: &crate::core::sense::SenseResolution,
+    ) {
+        match serde_json::to_value(resolution) {
+            Ok(value) => self.resolve_sense(query_id, value),
+            Err(error) => tracing::warn!(error = %error, "序列化语境结果失败"),
+        }
+    }
+
+    /// 读取已完成或进行中的语境结果；进行中返回 `None`。
+    pub fn sense_resolution(&self, query_id: &str) -> Option<crate::core::sense::SenseResolution> {
+        match self.sense_query_state(query_id) {
+            Some(SenseQueryState::Resolved(value)) => serde_json::from_value(value).ok(),
+            _ => None,
+        }
     }
 
     pub fn sense_query_state(&self, query_id: &str) -> Option<SenseQueryState> {
@@ -490,6 +616,7 @@ mod tests {
             settings: RwLock::new(Settings::default()),
             registry: RwLock::new(SourceRegistry::empty()),
             cards: Arc::new(CardStore::in_memory().expect("in-memory card store")),
+            cache: Arc::new(CacheStore::in_memory().expect("in-memory cache store")),
             hotkey: RwLock::new(HotkeyStatus {
                 accelerator: "CmdOrCtrl+Shift+D".to_string(),
                 registered: false,

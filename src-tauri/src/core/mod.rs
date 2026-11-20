@@ -1,6 +1,7 @@
 pub mod config;
 pub mod entry;
 pub mod error;
+pub mod events;
 pub mod html;
 pub mod logging;
 pub mod query_router;

@@ -30,8 +30,8 @@ impl std::fmt::Display for QueryId {
     }
 }
 
-/// 运行时事件。M1 只用于记录源失败；M2 由 Tauri 事件层转发。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 运行时事件。M1 只用于记录源失败；M2 由 Tauri 事件层转发；M4 增加远程结果。
+#[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeEvent {
     SourceFailure {
         query_id: String,
@@ -45,13 +45,30 @@ pub enum RuntimeEvent {
         source_id: String,
         elapsed_ms: u64,
     },
+    /// 远程源异步返回（含缓存命中）；`cached` 表示来自本地缓存。
+    RemoteResult {
+        query_id: String,
+        source_id: String,
+        source_name: String,
+        entries: Vec<crate::core::entry::Entry>,
+        cached: bool,
+        elapsed_ms: u64,
+    },
+    /// 远程源失败；只做提示，不影响已返回的本地结果。
+    RemoteError {
+        query_id: String,
+        source_id: String,
+        code: String,
+        message: String,
+    },
 }
 
 impl RuntimeEvent {
     pub fn code(&self) -> &str {
         match self {
-            Self::SourceFailure { code, .. } => code,
+            Self::SourceFailure { code, .. } | Self::RemoteError { code, .. } => code,
             Self::SourceSlow { .. } => "SLOW_SOURCE",
+            Self::RemoteResult { .. } => "OK",
         }
     }
 }

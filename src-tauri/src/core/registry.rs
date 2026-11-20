@@ -7,8 +7,7 @@ use serde::Serialize;
 
 use crate::core::config::Settings;
 use crate::core::entry::{SourceConfig, SourceKind};
-use crate::sources::local_file::LocalFileSource;
-use crate::sources::{DictionarySource, SourceStatus};
+use crate::sources::{build_source, DictionarySource, SourceStatus};
 
 /// 设置页/CLI 展示的数据源状态。
 #[derive(Debug, Clone, Serialize)]
@@ -25,7 +24,7 @@ struct RegistryEntry {
     source: Arc<dyn DictionarySource>,
 }
 
-/// 已打开的数据源集合。M1 只包含本地文件源。
+/// 已打开的数据源集合（本地文件与远程 HTTP）。
 #[derive(Default)]
 pub struct SourceRegistry {
     entries: Vec<RegistryEntry>,
@@ -36,7 +35,7 @@ impl SourceRegistry {
         Self::default()
     }
 
-    /// 打开配置中启用的本地源。远程源在 M1 跳过。
+    /// 打开配置中启用的数据源；配置有问题的远程源记录为 Failed，不阻塞启动。
     pub fn from_settings(settings: &Settings, base_dir: &Path) -> Self {
         let mut registry = Self::empty();
         registry.reload(settings, base_dir);
@@ -51,17 +50,16 @@ impl SourceRegistry {
             if !config.enabled {
                 continue;
             }
-            let SourceKind::LocalFile { .. } = &config.kind else {
-                tracing::info!(source_id = %config.id, "远程源在 M1 不打开");
-                continue;
-            };
+            if let SourceKind::RemoteHttp { .. } = &config.kind {
+                tracing::debug!(source_id = %config.id, "打开远程源");
+            }
             let reused = previous
                 .iter()
                 .position(|entry| entry.config == *config)
                 .map(|index| previous.swap_remove(index));
             let source = match reused {
                 Some(entry) => entry.source,
-                None => Arc::new(LocalFileSource::open(config.clone(), base_dir)),
+                None => build_source(config.clone(), base_dir),
             };
             entries.push(RegistryEntry {
                 config: config.clone(),
