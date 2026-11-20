@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import type { ReactNode } from "react";
 
 export type EmptyStateTone = "plain" | "block";
@@ -27,6 +28,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
+      role="status"
       className={[
         "flex flex-col items-center justify-center gap-2 px-6 py-10 text-center",
         TONES[tone],

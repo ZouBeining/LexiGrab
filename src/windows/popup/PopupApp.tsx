@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -602,7 +603,11 @@ export function PopupApp() {
         ) : null}
 
         {saved && state.saveResult ? (
-          <div className="rounded-lg border border-success/40 bg-canvas-soft px-3 py-2 text-xs leading-5">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-lg border border-success/40 bg-canvas-soft px-3 py-2 text-xs leading-5"
+          >
             <p className="font-medium text-success">已保存到 Anki</p>
             <p className="mt-0.5 font-mono text-[11px] tracking-[0.6px] text-ink-muted">
               note {state.saveResult.note_id}
