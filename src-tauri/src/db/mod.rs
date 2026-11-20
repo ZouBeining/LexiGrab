@@ -1,16 +1,21 @@
-//! SQLite store for saved-card history and the "same word + sentence +
-//! definition" context check. Contract: docs/BACKEND_STRUCTURE.md §3.
+//! SQLite store for saved-card history, lookup cache and sense cache.
+//! Contract: docs/BACKEND_STRUCTURE.md §3.
 //!
-//! Only the `saved_cards` table lives here; lookup/sense caches are separate
-//! concerns. All SQL is serialized behind one `Mutex<Connection>`, so
-//! `CardStore` is `Send + Sync` and safe to share through Tauri state. Blocking
-//! callers are expected to run store calls inside `spawn_blocking` (the Lead's
-//! command layer does).
+//! `saved_cards` and the "same word + sentence + definition" context check live
+//! here; the lookup/sense caches live in [`cache`]. All SQL is serialized
+//! behind one `Mutex<Connection>` per store, so both `CardStore` and
+//! `CacheStore` are `Send + Sync` and safe to share through Tauri state.
+//! Blocking callers are expected to run store calls inside `spawn_blocking`
+//! (the Lead's command layer does).
 //!
-//! Database layout: `%LOCALAPPDATA%\LexiGrab\cache.db` with WAL journaling, a
-//! 2s busy timeout and `user_version = 1`. A corrupt database file is renamed
-//! to `cache.db.corrupt-<unix>` and recreated instead of failing the app.
+//! Both stores open their own connection to the same file
+//! (`%LOCALAPPDATA%\LexiGrab\cache.db`). Each connection applies WAL
+//! journaling, a 2s busy timeout and `user_version = 2`, and runs the
+//! idempotent `CREATE ... IF NOT EXISTS` schema, so the open order is
+//! irrelevant. A corrupt database file is renamed to
+//! `cache.db.corrupt-<unix>` and recreated instead of failing the app.
 
+pub mod cache;
 pub mod fingerprint;
 
 use std::path::{Path, PathBuf};
@@ -24,13 +29,28 @@ use crate::core::error::IpcError;
 pub use fingerprint::{definition_key, definition_text, normalize_key, sentence_key};
 
 /// Schema version written to `PRAGMA user_version`.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// SQLite busy timeout in milliseconds.
 pub const BUSY_TIMEOUT_MS: u64 = 2000;
 
-/// `saved_cards` schema, verbatim from docs/BACKEND_STRUCTURE.md §3.
+/// Full database schema, verbatim from docs/BACKEND_STRUCTURE.md §3.
+///
+/// Every statement is idempotent so the same batch can run from both the
+/// `CardStore` and `CacheStore` connections.
 const SCHEMA_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS lookup_cache (
+  source_id    TEXT NOT NULL,
+  query_key    TEXT NOT NULL,
+  entries_json TEXT NOT NULL,
+  is_empty     INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL,
+  expires_at   INTEGER NOT NULL,
+  PRIMARY KEY (source_id, query_key)
+);
+CREATE INDEX IF NOT EXISTS idx_lookup_cache_expires
+  ON lookup_cache(expires_at);
+
 CREATE TABLE IF NOT EXISTS saved_cards (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   word            TEXT NOT NULL,
@@ -42,9 +62,18 @@ CREATE TABLE IF NOT EXISTS saved_cards (
 );
 CREATE INDEX IF NOT EXISTS idx_saved_cards_context
   ON saved_cards(word, sentence_key, definition_key);
+
+CREATE TABLE IF NOT EXISTS sense_cache (
+  context_key     TEXT PRIMARY KEY,
+  resolution_json TEXT NOT NULL,
+  created_at      INTEGER NOT NULL,
+  expires_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
+  ON sense_cache(expires_at);
 "#;
 
-/// Errors produced by the saved-card store.
+/// Errors produced by the saved-card and cache stores.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DbError {
     #[error("failed to open card store: {0}")]
@@ -104,52 +133,20 @@ impl CardStore {
     /// usable SQLite database it is renamed aside and a fresh one is created.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, DbError> {
         let path = path.as_ref().to_path_buf();
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(|error| {
-                    DbError::Open(format!(
-                        "create directory {} failed: {error}",
-                        parent.display()
-                    ))
-                })?;
-            }
-        }
-
-        match open_at(&path) {
-            Ok(store) => Ok(store),
-            Err(error) => {
-                // Only recognized corruption triggers quarantine; a locked or
-                // permission-denied valid database must never be renamed away.
-                if !should_quarantine(&path, &error) {
-                    return Err(error);
-                }
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "card store is unusable; moving it aside"
-                );
-                let backup = quarantine(&path)?;
-                let store = open_at(&path).map_err(|retry| {
-                    DbError::Recover(format!(
-                        "{retry} (original error: {error}; quarantined to {})",
-                        backup.display()
-                    ))
-                })?;
-                tracing::warn!(
-                    path = %path.display(),
-                    backup = %backup.display(),
-                    "recreated card store after corruption"
-                );
-                Ok(store)
-            }
-        }
+        let connection = open_database(&path)?;
+        Ok(CardStore {
+            connection: Mutex::new(connection),
+            path: Some(path),
+        })
     }
 
     /// In-memory store for tests; no file is touched.
     pub fn in_memory() -> Result<Self, DbError> {
-        let connection = Connection::open_in_memory()
-            .map_err(|error| DbError::Open(format!("open in-memory database: {error}")))?;
-        init_connection(connection, None)
+        let connection = open_in_memory_database()?;
+        Ok(CardStore {
+            connection: Mutex::new(connection),
+            path: None,
+        })
     }
 
     /// Path of the backing file, or `None` for in-memory stores.
@@ -252,15 +249,70 @@ impl CardStore {
     }
 }
 
+/// Open (or create) a file-backed database, quarantining a corrupt file.
+///
+/// Parent directories are created on demand. If the existing file is not a
+/// usable SQLite database it is renamed aside and a fresh one is created; a
+/// locked or permission-denied but structurally valid database is returned as
+/// an error untouched.
+pub(crate) fn open_database(path: &Path) -> Result<Connection, DbError> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                DbError::Open(format!(
+                    "create directory {} failed: {error}",
+                    parent.display()
+                ))
+            })?;
+        }
+    }
+
+    match open_at(path) {
+        Ok(connection) => Ok(connection),
+        Err(error) => {
+            // Only recognized corruption triggers quarantine; a locked or
+            // permission-denied valid database must never be renamed away.
+            if !should_quarantine(path, &error) {
+                return Err(error);
+            }
+            tracing::warn!(
+                path = %path.display(),
+                error = %error,
+                "cache database is unusable; moving it aside"
+            );
+            let backup = quarantine(path)?;
+            let connection = open_at(path).map_err(|retry| {
+                DbError::Recover(format!(
+                    "{retry} (original error: {error}; quarantined to {})",
+                    backup.display()
+                ))
+            })?;
+            tracing::warn!(
+                path = %path.display(),
+                backup = %backup.display(),
+                "recreated cache database after corruption"
+            );
+            Ok(connection)
+        }
+    }
+}
+
+/// Open (or create) an in-memory database and initialize schema/pragmas.
+pub(crate) fn open_in_memory_database() -> Result<Connection, DbError> {
+    let connection = Connection::open_in_memory()
+        .map_err(|error| DbError::Open(format!("open in-memory database: {error}")))?;
+    init_connection(connection)
+}
+
 /// Open a file-backed connection and initialize schema/pragmas.
-fn open_at(path: &Path) -> Result<CardStore, DbError> {
+fn open_at(path: &Path) -> Result<Connection, DbError> {
     let connection = Connection::open(path)
         .map_err(|error| DbError::Open(format!("open {}: {error}", path.display())))?;
-    init_connection(connection, Some(path.to_path_buf()))
+    init_connection(connection)
 }
 
 /// Apply pragmas and create the schema for a fresh connection.
-fn init_connection(connection: Connection, path: Option<PathBuf>) -> Result<CardStore, DbError> {
+fn init_connection(connection: Connection) -> Result<Connection, DbError> {
     connection
         .busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .map_err(query_error)?;
@@ -272,10 +324,7 @@ fn init_connection(connection: Connection, path: Option<PathBuf>) -> Result<Card
         .pragma_update(None, "user_version", i64::from(SCHEMA_VERSION))
         .map_err(query_error)?;
     connection.execute_batch(SCHEMA_SQL).map_err(query_error)?;
-    Ok(CardStore {
-        connection: Mutex::new(connection),
-        path,
-    })
+    Ok(connection)
 }
 
 /// Whether an open/init failure should be treated as database corruption.
@@ -361,7 +410,7 @@ fn sentence_key_for(sentence: Option<&str>) -> String {
 }
 
 /// Current unix timestamp in seconds; 0 on clocks before the epoch.
-fn now_unix() -> i64 {
+pub(crate) fn now_unix() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| i64::try_from(duration.as_secs()).unwrap_or(i64::MAX))
