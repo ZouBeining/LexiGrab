@@ -5,8 +5,11 @@ pub mod remote_http;
 
 use serde::Serialize;
 
-use crate::core::entry::Entry;
+use crate::core::entry::{Entry, SourceConfig, SourceKind};
 use crate::core::error::SourceError;
+
+use std::path::Path;
+use std::sync::Arc;
 
 /// 数据源运行时状态。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -43,4 +46,21 @@ pub trait DictionarySource: Send + Sync {
 
     /// 按逻辑 dict_id + 相对路径读取资源。
     fn resolve_resource(&self, dict_id: &str, path: &str) -> Result<SourceResource, SourceError>;
+
+    /// 是否为远程 HTTP 源；路由据此决定同步等待还是后台追加。
+    fn is_remote(&self) -> bool {
+        false
+    }
+}
+
+/// 按配置构造数据源；配置错误由各数据源记录为 Failed 状态，不 panic。
+pub fn build_source(config: SourceConfig, base_dir: &Path) -> Arc<dyn DictionarySource> {
+    match &config.kind {
+        SourceKind::LocalFile { .. } => {
+            Arc::new(local_file::LocalFileSource::open(config, base_dir))
+        }
+        SourceKind::RemoteHttp { .. } => {
+            Arc::new(remote_http::RemoteHttpSource::open(config, base_dir))
+        }
+    }
 }
