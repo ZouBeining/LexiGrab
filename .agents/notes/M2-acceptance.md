@@ -49,7 +49,7 @@ CLI 回归（夹具 `tests/fixtures/mini-config.toml`）：
 
 ## 3. 手工矩阵（pywinauto 自动化执行）
 
-2026-11-07 在交互桌面用 uv 管理的 Python 环境 + pywinauto 驱动真实应用跑完整矩阵，脚本与产物在 [.agents/automation/m2-manual](../../automation/m2-manual/)：
+2026-11-07 在交互桌面用 uv 管理的 Python 环境 + pywinauto 驱动真实应用跑完整矩阵，脚本与产物在 [.agents/automation/m2-manual](../automation/m2-manual/)：
 
 - `p1_manager.py` 源增删改/启停/排序/持久化/大词典；`p2_popup.py` 划词、焦点、快速/编辑态、时延；`p3_anki.py` 真实 Anki 制卡与错误态；`p4_lifecycle.py` 关闭到托盘/单实例/托盘菜单；`p5_media.py` 图片与音频渲染。
 - 运行方式见 §3.3；JSON 结果与截图在 `artifacts/`（`p1-manager.json` … `p5-media.json`、`20-…`/`30-…`/`50-…png`）。

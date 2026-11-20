@@ -30,7 +30,7 @@
   - 句子捕获：UIA 段落 120ms 预算，失败留空并异步补发选区事件。
   - 报告：[M2-acceptance](../notes/M2-acceptance.md)；Rust 193 项、前端 75 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
 - **M2 手工矩阵自动化（2026-11-07）**：
-  - 用 uv 管理的 Python + pywinauto 驱动真实应用跑完 9 项矩阵（源管理、划词/焦点、真实 Anki 制卡、托盘/单实例、mdx-res 渲染、时延），脚本与产物在 [.agents/automation/m2-manual](../../automation/m2-manual/)，结论写入 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
+  - 用 uv 管理的 Python + pywinauto 驱动真实应用跑完 9 项矩阵（源管理、划词/焦点、真实 Anki 制卡、托盘/单实例、mdx-res 渲染、时延），脚本与产物在 [.agents/automation/m2-manual](../automation/m2-manual/)，结论写入 [M2-acceptance](../notes/M2-acceptance.md) 第 3 节。
   - 时延：弹窗可见 p95 84.3ms；首结果 p95 296.4ms；41MB 词典加载中导航 137ms。真实 Anki 26.9.3 落库字段/标签核对通过。
   - 新发现 3 个待修复项（已于 2026-11-15 修复，见下）：mdx-res 图片在弹窗内破图、同语境提示对含本地媒体释义失效、托盘图标无 tooltip/可访问名称。
 - **M3 Firefox 扩展与本地桥接（2026-11-15）**：
@@ -52,7 +52,7 @@
   - 性能：缓存 `get` p95 0.016ms、JSONPath 100 条 p95 1.865ms、选择器额外 2.3ms、本地首屏不等待远程。报告：[M4-remote-baseline](../notes/M4-remote-baseline.md)、[M4-sense-baseline](../notes/M4-sense-baseline.md)。
 - **M3 Firefox 真机验收（2026-11-19）**：
   - 本机 Firefox Developer Edition 161.0（`D:\Firefox Developer Edition`）完成 29/29 场景：未签名 `.xpi` 安装、选项页配对、真实划词→查询→Anki 制卡、同词同句/不同句、中文页、Anki 关闭与重试、令牌轮换、重启保留、Wikipedia 英/中与 BBC 各 3 次划词、端口冲突、桥接鉴权/CORS。
-  - 自动化在 [.agents/automation/m3-firefox](../../automation/m3-firefox/)：自带 Marionette 客户端（无 geckodriver/selenium）+ 真实桌面端/Anki/testpage，`python -u run.py` 输出 `artifacts/results.json` 与截图；环境与结果见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 5 节。
+  - 自动化在 [.agents/automation/m3-firefox](../automation/m3-firefox/)：自带 Marionette 客户端（无 geckodriver/selenium）+ 真实桌面端/Anki/testpage，`python -u run.py` 输出 `artifacts/results.json` 与截图；环境与结果见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 5 节。
   - 修复真机发现的问题：扩展非 2xx 一律映射 `SERVER_ERROR`，现透出 `ANKI_UNREACHABLE` 等服务端错误码并在保存失败时显示标题/建议动作（扩展测试 34 → 42）；Tailwind 4 的 `@property` 默认值在 Firefox Shadow DOM 内不生效导致气泡无边框/阴影，`content/style.css` 在浮层作用域补齐 `--tw-border-style`/`--tw-*shadow`。
   - 产物更新：`lexigrab-firefox-0.1.0.xpi`（167,848 字节，sha256 `CBCD1245…3B362`），`web-ext lint` 仍为 0 error / 7 warning。
 - **M2 验收缺陷修复（2026-11-15）**：
@@ -60,6 +60,12 @@
   - 同语境提示失效：预检与导出统一走 `anki::export::context_definition_text`（先剥离本地媒体再转纯文本），含图片/音频的释义第二次保存会命中已存语境；`card_tests` 覆盖预检与落库指纹一致。
   - 托盘可访问名称：`TrayIconBuilder` 加 `.tooltip("LexiGrab")`，UIA Name 复验为 `LexiGrab`。
   - Rust 测试 193 项全绿；`clippy`/`fmt`/`typecheck`/`lint`/`build` 通过。
+
+- **文档体系重构（2026-11-20）**：
+  - [AGENTS.md](../../AGENTS.md) 重写为 47 行总纲：文档地图、会话启动、硬约束、验证门禁与提交规则，入口指向 PROMPT。
+  - [PROMPT.md](../../PROMPT.md) 重写为 agent 实现路径：代码地图、关键链路、IPC/事件/桥接/存储不变式、任务配方、验证矩阵与已知陷阱。
+  - 新增 [ROADMAP.md](../../ROADMAP.md)（组件位置、职责与阶段状态）与 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)（人读的分层与数据流）；修正 PRD、BACKEND_STRUCTURE、TECH_STACK 的交叉引用与过时事实（mdictlib、cargo-deny、运行时图）。
+  - 新增 `.agents/skills/repo-doc-curation/`，沉淀双读者文档重构与事实核对方法。
 
 ## 进行中
 

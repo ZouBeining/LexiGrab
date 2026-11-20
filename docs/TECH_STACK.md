@@ -2,7 +2,7 @@
 
 本文件是给人看的版本速查表。真正生效的是 `package.json`、`extension/package.json`、`src-tauri/Cargo.toml` 与两份锁文件；版本冲突时以锁文件为准，并回写本表。
 
-版本锁定日期：2026-10-28。升级任何直接依赖都要单独 PR，并在 `PROGRESS.md` 记录影响。
+版本锁定日期：2026-11-20。升级任何直接依赖都要单独 PR，并在 `PROGRESS.md` 记录影响。
 
 ## 1. 运行时与工具链
 
@@ -167,6 +167,6 @@ QuickJS 使用 libc 分配器时 `set_memory_limit(16MB)` 才生效。升级 rqu
 
 1. 直接依赖升级单独提交，附变更原因与验证结果。
 2. 前端与扩展升级后必须跑 `pnpm typecheck`、`pnpm lint`、`pnpm test`。
-3. Rust 升级后必须跑 `cargo test`、`cargo clippy --all-targets -- -D warnings`、`cargo deny check`。
-4. 涉及 libmdx、rquickjs、rusqlite 的升级要额外跑 MDX 夹具、脚本沙箱、缓存 TTL 测试。
+3. Rust 升级后必须跑 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`；`cargo deny check` 属 M5 发布门槛，目前尚未配置。
+4. 涉及 mdictlib、rquickjs、rusqlite 的升级要额外跑 MDX 夹具、脚本沙箱、缓存 TTL 测试。
 5. 本表与锁文件不一致时，先修表，再合并代码。

@@ -1,6 +1,6 @@
 # BACKEND_STRUCTURE
 
-本文件定义 LexiGrab 后端的数据结构、配置、存储、IPC 与本地 HTTP 契约。它是实现的唯一技术契约来源；各阶段的执行顺序见 [.agents/plans](../.agents/plans/)，产品范围见 [PRD.md](PRD.md)，交互路径见 [APP_FLOW.md](APP_FLOW.md)。
+本文件定义 LexiGrab 后端的数据结构、配置、存储、IPC 与本地 HTTP 契约。它是实现的唯一技术契约来源；系统分层见 [ARCHITECTURE.md](ARCHITECTURE.md)，组件位置见 [ROADMAP](../ROADMAP.md)，各阶段的执行顺序见 [.agents/plans](../.agents/plans/)，产品范围见 [PRD.md](PRD.md)，交互路径见 [APP_FLOW.md](APP_FLOW.md)。
 
 ## 1. 运行时结构
 
@@ -9,11 +9,11 @@ Tauri 主进程（Windows）
 ├─ AppState
 │  ├─ Settings（RwLock）
 │  ├─ SourceRegistry（本地/远程源）
-│  ├─ QueryRouter
-│  ├─ CacheManager（SQLite）
-│  ├─ AnkiClient
-│  ├─ BridgeHandle（127.0.0.1）
-│  └─ QueryMeta 环形缓存
+│  ├─ CardStore / CacheStore（SQLite）
+│  ├─ QueryMeta 环形缓存与语境结果
+│  └─ 捕获诊断、热键状态
+├─ QueryRouter（按查询临时构建）
+├─ BridgeService（127.0.0.1）
 ├─ 词典 worker 线程（每个 MDX 文件一个）
 ├─ Tokio 运行时（命令、桥接、远程 HTTP）
 └─ WebView 窗口：manager / popup / settings
@@ -52,7 +52,7 @@ pub enum ResourceRef {
 - 解析器返回 `source_name = ""`，由数据源层统一填写。
 - `definition_html` 已经过 ammonia 清洗，资源路径已改写。
 - 本地资源逻辑 URI：`mdx-res://{dict_id}/{percent-encoded path}`。
-- IPC JSON 字段使用 snake_case，与 PROMPT 的示例一致。
+- IPC JSON 字段使用 snake_case，与 `src/lib/types.ts` 保持一致。
 
 ### 2.2 SourceConfig
 

@@ -1,6 +1,6 @@
 # PRD
 
-本文件定义 LexiGrab 0.1.0 的产品范围、用户故事与成功标准。技术架构与里程碑的原始约定见 [PROMPT.md](../PROMPT.md)，不在本文件重复。界面与交互的逐屏路径见 [APP_FLOW.md](APP_FLOW.md)，视觉主参考见 [figma.md](../.agents/design/figma.md)。
+本文件定义 LexiGrab 0.1.0 的产品范围、用户故事与成功标准。系统分层见 [ARCHITECTURE.md](ARCHITECTURE.md)，组件位置与阶段状态见 [ROADMAP.md](../ROADMAP.md)，agent 实现路径见 [PROMPT.md](../PROMPT.md)。界面与交互的逐屏路径见 [APP_FLOW.md](APP_FLOW.md)，视觉主参考见 [figma.md](../.agents/design/figma.md)。
 
 ## 1. 产品定义
 
