@@ -9,6 +9,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend checks
@@ -26,15 +29,72 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - run: pnpm build
+
+  extension:
+    name: Firefox extension checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # pnpm-workspace.yaml 把 extension 纳入 workspace，根目录冻结安装已覆盖扩展依赖。
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C extension typecheck
+      - run: pnpm -C extension test
+      - run: pnpm -C extension build:firefox
+      - run: pnpm -C extension lint:firefox
 
   rust:
-    name: Rust checks
+    name: Rust checks (Windows)
     runs-on: windows-latest
     defaults:
       run:
         working-directory: src-tauri
     steps:
       - uses: actions/checkout@v4
+      - name: Check version sync
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $root = $env:GITHUB_WORKSPACE
+          $packageVersion = (Get-Content (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version
+          $cargoVersion = [regex]::Match(
+            (Get-Content (Join-Path $root "src-tauri/Cargo.toml") -Raw),
+            '(?m)^version\s*=\s*"([^"]+)"'
+          ).Groups[1].Value
+          $tauriVersion = (Get-Content (Join-Path $root "src-tauri/tauri.conf.json") -Raw | ConvertFrom-Json).version
+          $extensionVersion = (Get-Content (Join-Path $root "extension/package.json") -Raw | ConvertFrom-Json).version
+          # WXT 的 manifest.version 是显式值，不会随 extension/package.json 自动变化，一并校验。
+          $wxtConfig = Get-Content (Join-Path $root "extension/wxt.config.ts") -Raw
+          $wxtVersion = [regex]::Match($wxtConfig, '(?m)^\s+version:\s*"([^"]+)"').Groups[1].Value
+
+          $versions = [ordered]@{
+            "package.json"              = $packageVersion
+            "src-tauri/Cargo.toml"      = $cargoVersion
+            "src-tauri/tauri.conf.json" = $tauriVersion
+            "extension/package.json"    = $extensionVersion
+            "extension/wxt.config.ts"   = $wxtVersion
+          }
+
+          $versions.GetEnumerator() | ForEach-Object {
+            Write-Host ("{0}: {1}" -f $_.Key, $_.Value)
+          }
+
+          $distinct = @($versions.Values | Select-Object -Unique)
+          if ($distinct.Count -ne 1 -or [string]::IsNullOrWhiteSpace($distinct[0])) {
+            $summary = ($versions.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ", "
+            throw "Version mismatch: $summary"
+          }
+
+          Write-Host "Version sync OK: $($distinct[0])"
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
@@ -45,3 +105,15 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+
+  deny:
+    name: Dependency policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # deny.toml 位于 src-tauri/（与 Cargo.toml 同目录）；该 action 自带
+      # cargo-deny 0.22.0，并从 --manifest-path 所在目录开始向上查找配置。
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ./src-tauri/Cargo.toml
+          command: check licenses bans sources
