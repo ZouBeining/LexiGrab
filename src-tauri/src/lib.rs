@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 后端库：M0 窗口/选区捕获 + M1 核心链路 + M2 桌面 MVP。
 //! 业务逻辑放在 core/sources/parsers/anki/db，Tauri 命令只做薄封装。
 
@@ -86,6 +87,8 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::open_config_dir,
+            commands::open_log_dir,
+            commands::open_cache_dir,
             commands::get_bridge_status,
             commands::regenerate_bridge_token,
             commands::get_cache_stats,

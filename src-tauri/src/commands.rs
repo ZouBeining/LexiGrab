@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Tauri 命令层：只做参数整理、阻塞边界与错误映射，业务逻辑在 core / anki / db。
 
 use std::path::{Path, PathBuf};
@@ -679,15 +680,34 @@ fn on_main_thread(app: &AppHandle, old: &str, new: &str) -> IpcResult<()> {
         .map_err(|error| IpcError::internal(format!("切换热键未返回: {error}")))?
 }
 
-#[tauri::command]
-pub fn open_config_dir(app: AppHandle, state: State<'_, AppState>) -> IpcResult<()> {
+/// 用系统文件管理器打开目录；失败映射为可读的 IPC 错误。
+fn open_dir(app: &AppHandle, path: &Path, label: &str) -> IpcResult<()> {
     use tauri_plugin_opener::OpenerExt;
     app.opener()
-        .open_path(
-            state.paths.config_dir.to_string_lossy().to_string(),
-            None::<&str>,
-        )
-        .map_err(|error| IpcError::internal(format!("打开配置目录失败: {error}")))
+        .open_path(path.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|error| IpcError::internal(format!("打开{label}失败: {error}")))
+}
+
+#[tauri::command]
+pub fn open_config_dir(app: AppHandle, state: State<'_, AppState>) -> IpcResult<()> {
+    open_dir(&app, &state.paths.config_dir, "配置目录")
+}
+
+#[tauri::command]
+pub fn open_log_dir(app: AppHandle, state: State<'_, AppState>) -> IpcResult<()> {
+    open_dir(&app, &state.paths.log_dir, "日志目录")
+}
+
+/// 缓存是 SQLite 文件（`cache.db`）；打开其父目录，便于用户定位缓存库。
+#[tauri::command]
+pub fn open_cache_dir(app: AppHandle, state: State<'_, AppState>) -> IpcResult<()> {
+    let cache_dir = state
+        .paths
+        .cache_db
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| state.paths.cache_db.clone());
+    open_dir(&app, &cache_dir, "缓存目录")
 }
 
 /// 后台重建注册表并广播状态，避免大词典打开阻塞 UI 线程。
