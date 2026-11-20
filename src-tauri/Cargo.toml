@@ -49,6 +49,9 @@ reqwest = { version = "0.13.0", default-features = false, features = [
 mdictlib = "0.2.8"
 # saved_cards 语境指纹库；bundled 让 SQLite 随构建产物分发，不依赖系统 DLL。
 rusqlite = { version = "0.32", features = ["bundled"] }
+# M4 远程源：JSONPath 与 QuickJS 脚本解析。关闭 rust-alloc 让 set_memory_limit 生效。
+jsonpath-rust = "=1.0.6"
+rquickjs = { version = "0.14.0", default-features = false, features = ["std"] }
 # M3 本地桥接：只监听 127.0.0.1，axum 复用 Tauri 已有的 tokio 运行时。
 axum = { version = "0.8.1", default-features = false, features = [
   "http1",
