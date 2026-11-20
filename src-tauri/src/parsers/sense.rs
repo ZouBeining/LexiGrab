@@ -4,7 +4,7 @@
 //! 不调用选择器与 LLM、不做网络请求；无法拆分时退化为整条 Entry 一个候选。
 
 use scraper::{ElementRef, Html};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::entry::Entry;
 
@@ -49,7 +49,7 @@ const POS_ABBREVIATIONS: &[&str] = &[
 ];
 
 /// 从 `Entry.definition_html` 提取的候选义项。
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SenseCandidate {
     pub id: String,
     pub entry_index: usize,

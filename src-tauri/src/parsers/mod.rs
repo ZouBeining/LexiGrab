@@ -1,6 +1,9 @@
 //! 词典格式解析器。
 
+pub mod jsonpath;
 pub mod mdx;
+pub mod response;
+pub mod script;
 pub mod sense;
 
 use std::path::Path;
