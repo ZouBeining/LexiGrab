@@ -6,9 +6,10 @@ import { Button } from "../../components/Button";
 import { Spinner } from "../../components/Spinner";
 import { AboutSection } from "./AboutSection";
 import { AnkiSection } from "./AnkiSection";
+import { CacheSection } from "./CacheSection";
 import { ExtensionSection } from "./ExtensionSection";
 import { GeneralSection } from "./GeneralSection";
-import { CacheSection, SenseSection } from "./PlaceholderSections";
+import { SenseSection } from "./SenseSection";
 
 const SECTIONS = [
   { id: "general", label: "通用" },
@@ -81,41 +82,42 @@ export function SettingsApp() {
   }, []);
 
   const renderSection = () => {
-    if (section === "general" || section === "anki" || section === "extension") {
-      if (loading) {
-        return (
-          <div className="flex items-center gap-2 border-y border-hairline py-8">
-            <Spinner label="正在读取设置…" />
-          </div>
-        );
-      }
-      if (error) {
-        return (
-          <div role="alert" className="rounded-3xl border border-danger/40 px-6 py-6">
-            <p className="text-sm font-medium text-danger">无法读取设置</p>
-            <p className="mt-1 text-sm text-ink-muted">{error.message}</p>
-            <p className="mt-1 font-mono text-[11px] tracking-[0.6px] text-ink-muted">{error.code}</p>
-            <Button variant="secondary" size="sm" className="mt-3" onClick={retry}>
-              重试
-            </Button>
-          </div>
-        );
-      }
-      if (settings) {
-        if (section === "general") {
-          return <GeneralSection settings={settings} onSaved={setSettings} />;
-        }
-        if (section === "anki") {
-          return <AnkiSection settings={settings} onSaved={setSettings} />;
-        }
-        return <ExtensionSection settings={settings} onSaved={setSettings} />;
-      }
-      return null;
-    }
+    if (section === "about") return <AboutSection />;
 
-    if (section === "sense") return <SenseSection />;
-    if (section === "cache") return <CacheSection />;
-    return <AboutSection />;
+    if (loading) {
+      return (
+        <div className="flex items-center gap-2 border-y border-hairline py-8">
+          <Spinner label="正在读取设置…" />
+        </div>
+      );
+    }
+    if (error) {
+      return (
+        <div role="alert" className="rounded-3xl border border-danger/40 px-6 py-6">
+          <p className="text-sm font-medium text-danger">无法读取设置</p>
+          <p className="mt-1 text-sm text-ink-muted">{error.message}</p>
+          <p className="mt-1 font-mono text-[11px] tracking-[0.6px] text-ink-muted">{error.code}</p>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={retry}>
+            重试
+          </Button>
+        </div>
+      );
+    }
+    if (!settings) return null;
+
+    if (section === "general") {
+      return <GeneralSection settings={settings} onSaved={setSettings} />;
+    }
+    if (section === "anki") {
+      return <AnkiSection settings={settings} onSaved={setSettings} />;
+    }
+    if (section === "sense") {
+      return <SenseSection settings={settings} onSaved={setSettings} />;
+    }
+    if (section === "extension") {
+      return <ExtensionSection settings={settings} onSaved={setSettings} />;
+    }
+    return <CacheSection settings={settings} onSaved={setSettings} />;
   };
 
   return (
