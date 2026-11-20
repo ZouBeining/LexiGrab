@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! LLM 兜底释义生成。契约见 docs/BACKEND_STRUCTURE.md §7.6。
 //!
 //! 只在选择器低置信度或没有候选时由 `resolution` 调用；使用
@@ -155,7 +156,7 @@ fn map_request_error(error: reqwest::Error) -> LlmError {
     if error.is_timeout() {
         LlmError::Timeout
     } else {
-        LlmError::BadResponse(format!("LLM 请求失败: {error}"))
+        LlmError::BadResponse(format!("LLM 请求失败: {}", error.without_url()))
     }
 }
 

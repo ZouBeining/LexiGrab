@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 远程 HTTP 数据源。契约见 docs/BACKEND_STRUCTURE.md 2.2、7.2、7.3 与 PLAN_M4 T4.1。
 //!
 //! 查询是同步阻塞的；调用方负责放到 blocking 线程。远程失败只影响本源。
@@ -192,7 +193,7 @@ impl RemoteHttpSource {
                 let mapped = if error.is_timeout() {
                     SourceError::Timeout
                 } else {
-                    SourceError::Unavailable(format!("连接远程服务失败: {error}"))
+                    SourceError::Unavailable(format!("连接远程服务失败: {}", error.without_url()))
                 };
                 return Err(if retryable {
                     FetchFailure::Retry(mapped, None)

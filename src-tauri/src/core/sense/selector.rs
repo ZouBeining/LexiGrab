@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! JEV-like 义项选择器的 HTTP 适配。契约见 docs/BACKEND_STRUCTURE.md §7.5。
 //!
 //! 只做一件事：把单词、原句与候选义项 POST 给用户自己包装的本地 HTTP 服务，
@@ -144,7 +145,7 @@ fn map_request_error(error: reqwest::Error) -> SenseError {
     if error.is_timeout() {
         SenseError::Timeout
     } else {
-        SenseError::Failed(format!("选择器请求失败: {error}"))
+        SenseError::Failed(format!("选择器请求失败: {}", error.without_url()))
     }
 }
 
