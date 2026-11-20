@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useState } from "react";
 import { getBridgeStatus, getSettings, regenerateBridgeToken, toIpcError, updateSettings } from "../../lib/ipc";
 import { onBridgeStatus } from "../../lib/events";
@@ -41,6 +42,18 @@ async function copyText(value: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** 保存失败的下一步动作；文案与扩展 401/离线/端口占用提示保持一致。 */
+function saveErrorAction(code: string): string {
+  switch (code) {
+    case "BRIDGE_PORT_IN_USE":
+      return "换一个端口后重试；桌面端不会自动改用其他端口。";
+    case "CONFIG_INVALID":
+      return "检查端口与启用开关后重试。";
+    default:
+      return "检查配置后重试；错误码可用于排查日志。";
   }
 }
 
@@ -188,9 +201,13 @@ export function ExtensionSection({ settings, onSaved }: ExtensionSectionProps) {
             </p>
             <p className="mt-1 text-xs text-ink-muted">最近请求：{formatLastRequest(status)}</p>
             {status?.error ? (
-              <p role="alert" className="mt-2 text-xs text-danger">
-                {status.error}
-              </p>
+              <div role="alert" className="mt-2 text-xs">
+                <p className="font-medium text-danger">桥接启动失败</p>
+                <p className="mt-0.5 text-ink-muted">{status.error}</p>
+                <p className="mt-0.5 text-ink-muted">
+                  换一个端口后保存；端口占用时不会自动换端口。
+                </p>
+              </div>
             ) : null}
           </div>
           <Button variant="secondary" size="sm" onClick={() => void refreshStatus()}>
@@ -200,6 +217,7 @@ export function ExtensionSection({ settings, onSaved }: ExtensionSectionProps) {
         {statusError ? (
           <p role="alert" className="mt-2 text-xs text-danger">
             读取桥接状态失败：{statusError.message}
+            <span className="ml-2 text-ink-muted">点击“刷新状态”重试。</span>
           </p>
         ) : null}
       </div>
@@ -269,17 +287,25 @@ export function ExtensionSection({ settings, onSaved }: ExtensionSectionProps) {
               {copied ? "已复制" : "复制"}
             </Button>
           </div>
+          <p role="status" aria-live="polite" className="sr-only">
+            {copied ? "令牌已复制" : ""}
+          </p>
         </Field>
 
         <div className="rounded-2xl border border-hairline px-5 py-4">
           <p className="text-sm font-medium">轮换令牌</p>
           <p className="mt-1 text-xs text-ink-muted">
-            轮换后旧令牌立即失效，扩展需要重新配对。已保存的卡片不受影响。
+            轮换后旧令牌立即失效，扩展会提示“令牌错误”，需要重新配对。已保存的卡片不受影响。
           </p>
           {rotateError ? (
-            <p role="alert" className="mt-2 text-xs text-danger">
-              轮换失败：{rotateError.message}
-            </p>
+            <div role="alert" className="mt-2 text-xs">
+              <p className="font-medium text-danger">轮换失败</p>
+              <p className="mt-0.5 text-ink-muted">{rotateError.message}</p>
+              <p className="mt-0.5 text-ink-muted">重试；如仍失败，重启桌面端后再轮换。</p>
+              <p className="mt-0.5 font-mono text-[11px] tracking-[0.6px] text-ink-muted">
+                {rotateError.code}
+              </p>
+            </div>
           ) : null}
           <div className="mt-3">
             {confirmRotate ? (
@@ -326,6 +352,7 @@ export function ExtensionSection({ settings, onSaved }: ExtensionSectionProps) {
           <div role="alert" className="rounded-2xl border border-danger/40 px-4 py-3 text-sm">
             <p className="font-medium text-danger">保存失败</p>
             <p className="mt-1 text-ink-muted">{saveError.message}</p>
+            <p className="mt-1 text-ink-muted">{saveErrorAction(saveError.code)}</p>
             <p className="mt-1 font-mono text-[11px] tracking-[0.6px] text-ink-muted">
               {saveError.code}
             </p>

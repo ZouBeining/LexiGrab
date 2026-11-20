@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeStatus, Settings } from "../../lib/types";
@@ -150,5 +151,23 @@ describe("ExtensionSection", () => {
       bridge: { enabled: false, port: 12787 },
     });
     await waitFor(() => expect(screen.getByText("已保存")).toBeTruthy());
+  });
+
+  it("端口占用时在 role=alert 中给出动作与错误码", async () => {
+    mocks.updateSettings.mockRejectedValue({
+      code: "BRIDGE_PORT_IN_USE",
+      message: "端口 12787 已被占用",
+      detail: null,
+    });
+    render(<ExtensionSection settings={SETTINGS} onSaved={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("运行中")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("保存失败");
+    expect(alert.textContent).toContain("端口 12787 已被占用");
+    expect(alert.textContent).toContain("换一个端口后重试");
+    expect(alert.textContent).toContain("BRIDGE_PORT_IN_USE");
   });
 });

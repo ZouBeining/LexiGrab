@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useState } from "react";
 import {
   clearLookupCache,
@@ -314,7 +315,11 @@ export function CacheSection({ settings, onSaved }: CacheSectionProps) {
         </p>
 
         {notice ? (
-          <p role="status" className="mt-3 rounded-xl bg-canvas-soft px-3 py-2 text-xs text-ink-muted">
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded-xl bg-canvas-soft px-3 py-2 text-xs text-ink-muted"
+          >
             {notice}
           </p>
         ) : null}

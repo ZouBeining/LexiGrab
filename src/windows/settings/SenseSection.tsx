@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from "react";
 import { clearSenseCache, testLlm, testSenseSelector, toIpcError, updateSettings } from "../../lib/ipc";
 import type {
@@ -675,7 +676,11 @@ export function SenseSection({ settings, onSaved }: SenseSectionProps) {
         </p>
 
         {clearNotice ? (
-          <p role="status" className="mt-3 rounded-xl bg-canvas-soft px-3 py-2 text-xs text-ink-muted">
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded-xl bg-canvas-soft px-3 py-2 text-xs text-ink-muted"
+          >
             {clearNotice}
           </p>
         ) : null}

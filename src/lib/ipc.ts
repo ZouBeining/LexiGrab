@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * Tauri IPC 薄封装。组件与窗口只从这里导入，不直接 invoke。
  *
@@ -223,6 +224,16 @@ export function regenerateBridgeToken(): Promise<string> {
 /** 打开配置目录（系统文件管理器）。 */
 export function openConfigDir(): Promise<void> {
   return call<void>("open_config_dir");
+}
+
+/** 打开日志目录（系统文件管理器）。 */
+export function openLogDir(): Promise<void> {
+  return call<void>("open_log_dir");
+}
+
+/** 打开缓存目录；后端打开 `cache.db` 的父目录。 */
+export function openCacheDir(): Promise<void> {
+  return call<void>("open_cache_dir");
 }
 
 // ---------------------------------------------------------------------------
