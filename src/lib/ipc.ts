@@ -6,10 +6,12 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AiDefinition,
   AnkiModel,
   AnkiPayload,
   AnkiStatus,
   BridgeStatus,
+  CacheStats,
   CaptureResult,
   CaptureStats,
   CardContext,
@@ -20,6 +22,8 @@ import type {
   QueryMeta,
   RuntimeStatus,
   SelectionContext,
+  SenseCandidate,
+  SenseResolution,
   Settings,
   SourceConfig,
   SourceStateEntry,
@@ -62,14 +66,17 @@ export interface LookupOptions {
   sourceIds?: string[];
   /** 由前端生成（crypto.randomUUID），用于关联远程结果与语境事件。 */
   queryId?: string;
+  /** 原句；有值时后台触发语境辅助，结果通过 `lookup://sense-result` 返回。 */
+  sentence?: string | null;
 }
 
-/** 同步查询本地词典；远程结果通过 `lookup://remote-result` 事件追加。 */
+/** 同步查询本地词典与缓存；远程结果通过 `lookup://remote-result` 事件追加。 */
 export function lookup(options: LookupOptions): Promise<Entry[]> {
   return call<Entry[]>("lookup", {
     query: options.query,
     sourceIds: options.sourceIds,
     queryId: options.queryId,
+    sentence: options.sentence,
   });
 }
 
@@ -107,9 +114,51 @@ export function getSourceStatuses(): Promise<SourceStateEntry[]> {
   return call<SourceStateEntry[]>("get_source_statuses");
 }
 
-/** 用草稿配置查询，不写盘、不缓存。 */
+/** 用草稿配置查询，不写盘、不缓存。远程失败放在 `TestResult.error`。 */
 export function testSourceQuery(config: SourceConfig, query: string): Promise<TestResult> {
   return call<TestResult>("test_source_query", { config, query });
+}
+
+// ---------------------------------------------------------------------------
+// 缓存
+// ---------------------------------------------------------------------------
+
+/** 词典缓存与语境缓存统计。 */
+export function getCacheStats(): Promise<CacheStats> {
+  return call<CacheStats>("get_cache_stats");
+}
+
+/** 清除词典缓存（lookup_cache）；不清 saved_cards 与 sense_cache。 */
+export function clearLookupCache(): Promise<{ removed: number }> {
+  return call<{ removed: number }>("clear_lookup_cache");
+}
+
+/** 清除语境缓存（sense_cache）。 */
+export function clearSenseCache(): Promise<{ removed: number }> {
+  return call<{ removed: number }>("clear_sense_cache");
+}
+
+// ---------------------------------------------------------------------------
+// 语境辅助
+// ---------------------------------------------------------------------------
+
+/** 读取已完成（或进行中）的语境推荐；未知/过期返回 null。 */
+export function getSenseResolution(queryId: string): Promise<SenseResolution | null> {
+  return call<SenseResolution | null>("get_sense_resolution", { queryId });
+}
+
+/** 设置页测试选择器；不写缓存、不写卡。 */
+export function testSenseSelector(word: string, sentence: string): Promise<SenseResolution> {
+  return call<SenseResolution>("test_sense_selector", { word, sentence });
+}
+
+/** 设置页测试 LLM；不写缓存、不写卡，失败以 IPC 错误返回。 */
+export function testLlm(
+  word: string,
+  sentence: string,
+  senses: SenseCandidate[] = [],
+): Promise<AiDefinition> {
+  return call<AiDefinition>("test_llm", { word, sentence, senses });
 }
 
 // ---------------------------------------------------------------------------

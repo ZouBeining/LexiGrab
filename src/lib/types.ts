@@ -79,16 +79,41 @@ export interface Entry {
 // ---------------------------------------------------------------------------
 
 /**
- * 数据源配置。M2 只有本地文件源；远程源（type: "remote_http"）在 M4 接入。
- * Rust 侧为 flattened SourceKind，故 `type` 与 `paths` 和 id/name 平级。
+ * 数据源配置。Rust 侧为 flattened SourceKind，故 `type` 与各类型字段和
+ * id/name/enabled/priority 平级。契约见 BACKEND_STRUCTURE §2.2。
  */
-export interface SourceConfig {
+interface SourceConfigBase {
   id: string;
   name: string;
-  type: "local_file";
-  paths: string[];
   enabled: boolean;
   priority: number;
+}
+
+export interface LocalSourceConfig extends SourceConfigBase {
+  type: "local_file";
+  paths: string[];
+}
+
+/** 远程响应解析配置；`timeout_ms` 仅脚本模式使用，为空时用 200ms 默认值。 */
+export type ResponseParserConfig =
+  | { mode: "jsonpath"; expression: string }
+  | { mode: "script"; path: string; timeout_ms: number | null };
+
+export interface RemoteSourceConfig extends SourceConfigBase {
+  type: "remote_http";
+  url_template: string;
+  response_parser: ResponseParserConfig;
+  auth_header: string | null;
+  auth_value: string | null;
+  timeout_ms: number;
+}
+
+export type SourceConfig = LocalSourceConfig | RemoteSourceConfig;
+
+/** `test_source_query` 的远程失败：命令仍返回结果，错误放在这里供测试面板展示。 */
+export interface TestFailure {
+  code: string;
+  message: string;
 }
 
 export type SourceStatus =
@@ -110,6 +135,10 @@ export interface TestResult {
   entries: Entry[];
   source_name: string;
   elapsed_ms: number;
+  /** 远程响应前 4KB，仅远程源测试面板展示。 */
+  raw_preview: string | null;
+  /** 远程查询失败时的可读错误；本地源失败仍以 IPC 错误 reject。 */
+  error: TestFailure | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +247,8 @@ export interface AnkiPayload {
   definition_html: string;
   sentence: string | null;
   source: string;
+  /** 追加标签；AI 释义卡带 `ai-generated`，省略为空。 */
+  tags?: string[];
 }
 
 /** `export_to_anki` 返回值；`exact_context_seen` 仅用于同语境提示，不阻断。 */
@@ -252,6 +283,16 @@ export interface QueryMeta {
   query_id: string;
   cached_sources: { source_id: string; source_name: string }[];
   pending_remote: number;
+}
+
+/** `get_cache_stats`：词典缓存（lookup_cache）与语境缓存（sense_cache）统计。 */
+export interface CacheStats {
+  entries: number;
+  positive_entries: number;
+  empty_entries: number;
+  sense_entries: number;
+  /** lookup_cache.entries_json 总字节数。 */
+  bytes: number;
 }
 
 export interface HotkeyStatus {
@@ -311,6 +352,8 @@ export interface SenseResolution {
   selector_model: string | null;
   ai: AiDefinition | null;
   error: string | null;
+  /** 本次候选义项快照；UI 据此高亮与切换。 */
+  candidates: SenseCandidate[];
 }
 
 // ---------------------------------------------------------------------------
