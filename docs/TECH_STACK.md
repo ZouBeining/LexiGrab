@@ -2,7 +2,7 @@
 
 本文件是给人看的版本速查表。真正生效的是 `package.json`、`extension/package.json`、`src-tauri/Cargo.toml` 与两份锁文件；版本冲突时以锁文件为准，并回写本表。
 
-版本锁定日期：2026-11-20。升级任何直接依赖都要单独 PR，并在 `PROGRESS.md` 记录影响。
+版本锁定日期：2026-11-21（按锁文件回写）。升级任何直接依赖都要单独 PR，并在 `PROGRESS.md` 记录影响。
 
 ## 1. 运行时与工具链
 
@@ -80,30 +80,30 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `tauri-plugin-dialog` | 2.8.4 | Apache-2.0 OR MIT | 文件选择 |
 | `tauri-plugin-opener` | 2.7.2 | Apache-2.0 OR MIT | 打开链接与目录 |
 | `tauri-plugin-single-instance` | 2.5.5 | Apache-2.0 OR MIT | 单实例 |
-| `serde` | 1.0.215 | MIT OR Apache-2.0 | 序列化 |
-| `serde_json` | 1.0.140 | MIT OR Apache-2.0 | JSON |
-| `toml` | 0.8.19 | MIT OR Apache-2.0 | 配置 |
-| `thiserror` | 2.0.11 | MIT OR Apache-2.0 | 错误类型 |
-| `tokio` | 1.43.0 | MIT | 异步运行时 |
-| `reqwest` | 0.13.0 | MIT OR Apache-2.0 | 远程词典、AnkiConnect、选择器、LLM |
-| `ammonia` | 4.0.0 | MIT OR Apache-2.0 | HTML 清洗 |
-| `lol_html` | 2.6.0 | BSD-3-Clause | 资源路径改写 |
+| `serde` | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
+| `serde_json` | 1.0.154 | MIT OR Apache-2.0 | JSON |
+| `toml` | 0.8.23 | MIT OR Apache-2.0 | 配置 |
+| `thiserror` | 2.0.21 | MIT OR Apache-2.0 | 错误类型 |
+| `tokio` | 1.54.1 | MIT | 异步运行时 |
+| `reqwest` | 0.13.5 | MIT OR Apache-2.0 | 远程词典、AnkiConnect、选择器、LLM |
+| `ammonia` | 4.2.4 | MIT OR Apache-2.0 | HTML 清洗 |
+| `lol_html` | 2.9.0 | BSD-3-Clause | 资源路径改写 |
 | `scraper` | 0.24.0 | ISC | 从释义 HTML 提取候选义项 |
-| `uuid` | 1.17.0 | MIT OR Apache-2.0 | ID 生成 |
-| `mime_guess` | 2.0.4 | MIT | 资源 MIME |
-| `url` | 2.5.2 | MIT OR Apache-2.0 | URL |
-| `percent-encoding` | 2.3.1 | MIT OR Apache-2.0 | 资源路径编码 |
-| `unicode-normalization` | 0.1.24 | MIT OR Apache-2.0 | 查询归一化 |
+| `uuid` | 1.29.0 | MIT OR Apache-2.0 | ID 生成 |
+| `mime_guess` | 2.0.5 | MIT | 资源 MIME |
+| `url` | 2.5.8 | MIT OR Apache-2.0 | URL |
+| `percent-encoding` | 2.3.2 | MIT OR Apache-2.0 | 资源路径编码 |
+| `unicode-normalization` | 0.1.26 | MIT OR Apache-2.0 | 查询归一化 |
 | `mdictlib` | 0.2.8 | MIT | 唯一 MDX/MDD 读取库 |
-| `clap` | 4.5.23 | MIT OR Apache-2.0 | 开发 CLI |
-| `tracing` | 0.1.41 | MIT | 日志 |
-| `tracing-subscriber` | 0.3.19 | MIT | 日志输出 |
-| `tracing-appender` | 0.2.3 | MIT | 文件日志滚动 |
+| `clap` | 4.6.7 | MIT OR Apache-2.0 | 开发 CLI |
+| `tracing` | 0.1.44 | MIT | 日志 |
+| `tracing-subscriber` | 0.3.23 | MIT | 日志输出 |
+| `tracing-appender` | 0.2.5 | MIT | 文件日志滚动 |
 | `axum` | 0.8.9（`Cargo.toml` 声明 0.8.1，按 `^` 解析） | MIT | 本地桥接路由与请求体上限 |
 | `jsonpath-rust` | 1.0.6 | MIT | JSONPath |
 | `rquickjs` | 0.14.0 | MIT | 脚本沙箱 |
 | `rusqlite` | 0.32.1（`bundled`） | MIT | `saved_cards` 语境指纹 + `lookup_cache`/`sense_cache`（M4）；计划值 0.33 因 MSVC 构建环境锁到 0.32.1 |
-| `windows` | 0.62.0 | MIT OR Apache-2.0 | Win32 API |
+| `windows` | 0.62.2 | MIT OR Apache-2.0 | Win32 API |
 | `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 | HWND 获取 |
 
 桥接的鉴权、CORS 与关停不引入额外依赖：常量时间比较、CORS 头与令牌桶在
@@ -115,9 +115,9 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 
 | crate | 锁定版本 | 许可证 | 用途 |
 | --- | --- | --- | --- |
-| `wiremock` | 0.6.2 | MIT OR Apache-2.0 | HTTP mock |
+| `wiremock` | 0.6.5 | MIT OR Apache-2.0 | HTTP mock |
 | `tower` | 0.5.3 | MIT | `ServiceExt::oneshot` 直接测桥接路由 |
-| `http-body-util` | 0.1.2 | MIT | 响应体断言 |
+| `http-body-util` | 0.1.5 | MIT | 响应体断言 |
 
 ## 6. 词典与脚本依赖
 
@@ -167,6 +167,6 @@ QuickJS 使用 libc 分配器时 `set_memory_limit(16MB)` 才生效。升级 rqu
 
 1. 直接依赖升级单独提交，附变更原因与验证结果。
 2. 前端与扩展升级后必须跑 `pnpm typecheck`、`pnpm lint`、`pnpm test`。
-3. Rust 升级后必须跑 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`；`cargo deny check` 属 M5 发布门槛，目前尚未配置。
+3. Rust 升级后必须跑 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`；`cargo deny check licenses bans sources` 已配置，属发布门槛。
 4. 涉及 mdictlib、rquickjs、rusqlite 的升级要额外跑 MDX 夹具、脚本沙箱、缓存 TTL 测试。
 5. 本表与锁文件不一致时，先修表，再合并代码。

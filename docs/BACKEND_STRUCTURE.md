@@ -363,6 +363,8 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 | `open_window` | `manager \| settings` | `void` | 白名单 |
 | `probe_anki` | 无 | `AnkiStatus` | 只读探测 |
 | `open_config_dir` | 无 | `void` | 打开配置目录 |
+| `open_log_dir` | 无 | `void` | 打开日志目录 |
+| `open_cache_dir` | 无 | `void` | 打开缓存目录（`cache.db` 所在目录） |
 | `get_query_meta` | `query_id` | `QueryMeta \| null` | 缓存/远程标记 |
 | `show_window` | `label` | `void` | 白名单显示窗口（M0 遗留，供诊断页使用） |
 | `debug_trigger_capture` | 无 | `CaptureResult` | 绕过热键触发一次捕获（开发诊断） |
