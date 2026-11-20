@@ -171,6 +171,9 @@ pub struct AnkiPayload {
     pub definition_html: String,
     pub sentence: Option<String>,
     pub source: String,
+    /// 追加标签；AI 释义卡带 `ai-generated`，缺省为空。
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 ```
 
@@ -187,6 +190,18 @@ interface QueryMeta {
 ```
 
 只保留最近 8 个 query_id。`lookup` 返回 `Entry[]`，元数据由 `get_query_meta` 单独读取。
+
+`get_cache_stats` 返回缓存统计：
+
+```ts
+interface CacheStats {
+  entries: number;           // lookup_cache 行数
+  positive_entries: number;  // 非空结果
+  empty_entries: number;     // 负缓存
+  sense_entries: number;     // sense_cache 行数
+  bytes: number;             // entries_json 总字节
+}
+```
 
 ### 2.6 语境辅助模型
 
@@ -224,6 +239,9 @@ pub struct SenseResolution {
     pub selector_model: Option<String>,
     pub ai: Option<AiDefinition>,
     pub error: Option<String>,
+    /// 本次候选义项快照；UI 据此高亮与切换，事件与 `get_sense_resolution` 都带。
+    #[serde(default)]
+    pub candidates: Vec<SenseCandidate>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -310,7 +328,8 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 
 - `saved_cards` 只用于“同词同句同释义”提示与本地历史，不参与 Anki 唯一性。
 - 指纹：NFKC + 小写 + 压缩空白后，用 uuid v5 生成；释义取纯文本。
-- `sense_cache` 缓存选择器/LLM 结果，TTL 7 天；不缓存失败。
+- `sense_cache` 缓存选择器/LLM 结果，TTL 7 天；key 含 model 与提示词版本；不缓存失败。
+- `lookup_cache` 只缓存 HTTP 远程源；本地 MDX 查询不经过缓存（延迟已满足首屏预算）。
 - 清除“词典缓存”不默认清除 `saved_cards`（历史）与 `sense_cache`；设置页分别提供清理。
 - `PRAGMA journal_mode = WAL`、`busy_timeout = 2000`、`user_version` 记录 schema 版本。
 - 查询键：trim + NFKC + 小写。
@@ -324,7 +343,7 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 
 | 命令 | 参数 | 返回 | 说明 |
 | --- | --- | --- | --- |
-| `lookup` | `query`, `source_ids?`, `query_id?` | `Entry[]` | 同步结果；远程异步事件追加 |
+| `lookup` | `query`, `source_ids?`, `query_id?`, `sentence?` | `Entry[]` | 同步本地与缓存结果；远程异步事件追加，有原句时后台触发语境辅助 |
 | `list_sources` | 无 | `SourceConfig[]` | 仅配置 |
 | `add_source` | `config` | `SourceConfig` | 保存并异步打开 |
 | `update_source` | `id`, `config` | `SourceConfig` | 保存并重载 |
@@ -337,7 +356,7 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 | `update_settings` | `settings` | `Settings` | 校验、应用热键、保存 |
 | `get_runtime_status` | 无 | `RuntimeStatus` | 热键、版本、路径 |
 | `get_source_statuses` | 无 | `SourceStatus[]` | 运行时状态 |
-| `test_source_query` | `config`, `query` | `TestResult` | 草稿配置，不写盘 |
+| `test_source_query` | `config`, `query` | `TestResult` | 草稿配置，不写盘；远程失败放在 `error`，附 `raw_preview`（前 4KB） |
 | `get_current_selection` | 无 | `SelectionContext \| null` | 弹窗挂载兜底 |
 | `set_popup_interactive` | `interactive` | `void` | 切换编辑焦点 |
 | `hide_popup` | 无 | `void` | 关闭弹窗 |
@@ -353,6 +372,8 @@ CREATE INDEX IF NOT EXISTS idx_sense_cache_expires
 | `test_sense_selector` | `word`, `sentence` | `SenseResolution` | 设置页测试，不写缓存 |
 | `test_llm` | `word`, `sentence`, `senses` | `AiDefinition` | 设置页测试，不写缓存 |
 | `clear_sense_cache` | 无 | `{ removed }` | 清理语境缓存 |
+| `get_cache_stats` | 无 | `CacheStats` | 词典/语境缓存统计 |
+| `clear_lookup_cache` | 无 | `{ removed }` | 清理词典缓存，保留 `saved_cards` 与 `sense_cache` |
 | `get_bridge_status` | 无 | `BridgeStatus` | 桥接状态 |
 | `regenerate_bridge_token` | 无 | `string` | 轮换令牌 |
 

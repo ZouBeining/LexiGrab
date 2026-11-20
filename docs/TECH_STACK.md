@@ -102,7 +102,7 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | `axum` | 0.8.9（`Cargo.toml` 声明 0.8.1，按 `^` 解析） | MIT | 本地桥接路由与请求体上限 |
 | `jsonpath-rust` | 1.0.6 | MIT | JSONPath |
 | `rquickjs` | 0.14.0 | MIT | 脚本沙箱 |
-| `rusqlite` | 0.32.1（`bundled`） | MIT | saved_cards 语境指纹（M2）；计划值 0.33 因 MSVC 构建环境锁到 0.32.1 |
+| `rusqlite` | 0.32.1（`bundled`） | MIT | `saved_cards` 语境指纹 + `lookup_cache`/`sense_cache`（M4）；计划值 0.33 因 MSVC 构建环境锁到 0.32.1 |
 | `windows` | 0.62.0 | MIT OR Apache-2.0 | Win32 API |
 | `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 | HWND 获取 |
 
@@ -126,6 +126,10 @@ Firefox 使用 WXT 默认的 MV2 构建。`browser_specific_settings.gecko.id` �
 | mdictlib | 0.2.8（crates.io） | MIT | 唯一 MDX/MDD 读取库；计划中的 libmdx git rev 已不可达（2026-10-29 核实） |
 | QuickJS | 由 `rquickjs 0.14.0` 内置 | MIT | 脚本执行 |
 | SQLite | 由 `rusqlite` bundled 提供 | 公有领域 | 缓存 |
+
+`rquickjs` 使用 `default-features = false, features = ["std"]`，不启用 `rust-alloc`：
+QuickJS 使用 libc 分配器时 `set_memory_limit(16MB)` 才生效。升级 rquickjs 必须复跑
+脚本 OOM、死循环与 `fetch` 未定义用例（见 `.agents/notes/M4-remote-baseline.md`）。
 
 原计划的 libmdx（git `111cab6c`，AGPL-3.0）在 GitHub 上无对应提交，`https://github.com/QuickDict/libmdx` 是 C 实现。改用 `mdictlib`（MIT，支持 MDX/MDD 1.x/2.x、LZO/zlib、GBK/Big5 等编码，并自带 v2.0 写入器用于生成测试夹具）。许可证与 AGPL-3.0 兼容。
 

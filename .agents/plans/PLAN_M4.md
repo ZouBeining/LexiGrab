@@ -4,7 +4,7 @@ title: 远程源、语境辅助与缓存
 depends_on: [M2, M3]
 exit_gate: 非标准 API 可解析；JEV-like 选义项并在低置信度时生成可用的 AI 释义；远程/辅助失败不影响本地结果
 estimate: 14-18 人日
-status: planned
+status: done
 ---
 
 # M4 远程源、语境辅助与缓存

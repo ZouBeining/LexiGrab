@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-11-19。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-11-20。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -41,6 +41,15 @@
   - 扩展：`extension/` 使用 WXT 0.21.5 + React 19 + Tailwind 4；`lib/sentence.ts` 纯函数句子提取（Intl.Segmenter 优先、标点回退、隐藏元素与密码框过滤），`lib/bridge.ts` 固定错误码客户端，Shadow DOM 浮动按钮 + 360×480 结果气泡（DOMPurify 二次清洗、语境轮询、同词连续保存不阻断），options 页配对与测试连接。
   - 产物：`pnpm -C extension build:firefox` + `web-ext lint`（0 error / 7 warning）+ `web-ext build` 生成未签名 `lexigrab-firefox-0.1.0.xpi`（sha256 见报告）。
   - 报告：[M3-extension-verification](../notes/M3-extension-verification.md)；Rust 228 项、扩展 34 项、前端 81 项测试，`clippy`/`fmt`/`typecheck`/`lint`/`vite build` 全绿。
+- **M4 远程源、语境辅助与缓存（2026-11-20）**：
+  - 远程源：`RemoteHttpSource`（模板/鉴权/超时/重试/跨主机重定向停止/2MB/状态“上次失败”）、`build_source` 与 `DictionarySource::is_remote`；`test_query` 返回条目与前 4KB 原始响应。
+  - 解析器：`ResponseParser` 契约 + `finalize_entries`（清洗、512KB、20 条、绝对 http(s) 资源）；`JsonPathParser`（jsonpath-rust 1.0.6）；`ScriptParser`（rquickjs 0.14，16MB/256KB 栈/50–1000ms 中断器、源码 mtime 缓存、无 fetch/require/timer）。
+  - 缓存：`db/cache.rs` 的 `CacheStore`（`lookup_cache`/`sense_cache`、WAL、busy_timeout、`user_version=2`、可注入时钟、正/负缓存、按源失效、统计与清理、损坏隔离）。
+  - 路由：`QueryRouter::lookup_planned` 支持三种策略；`first_hit` 远程同步、`local_first`/`aggregate` 远程后台任务；`lookup://remote-result`/`remote-error`；`QueryMeta` 记录缓存来源与 pending；桥接 `lookup_collect_all` 纳入远程并沿用 3.5s 截止。
+  - 语境辅助：`core/sense/{selector,llm,resolution}`；阈值状态机；`sense_cache`（key 含 model 与 prompt version，7 天）；默认回环 + 远程显式允许；失败不自动调 LLM；命令 `test_sense_selector`/`test_llm`/`get_sense_resolution`/`clear_sense_cache`。
+  - 前端：管理器远程源编辑与测试面板；设置页“缓存”“语境辅助”分区；弹窗推荐条/义项切换/AI 卡/远程进度/缓存徽标；AI 卡保存 `AI · <model>` + `ai-generated`。
+  - 验收：`.agents/automation/m4-mock/` 用 Python mock + `lexigrab-dev` 跑通 JSONPath/脚本/失败隔离/空结果（8/8）；`cargo test` 328 通过（3 个性能探针默认忽略）、`clippy`/`fmt` 全绿；`pnpm typecheck`/`lint`/`test`（121）/`build` 全绿。
+  - 性能：缓存 `get` p95 0.016ms、JSONPath 100 条 p95 1.865ms、选择器额外 2.3ms、本地首屏不等待远程。报告：[M4-remote-baseline](../notes/M4-remote-baseline.md)、[M4-sense-baseline](../notes/M4-sense-baseline.md)。
 - **M3 Firefox 真机验收（2026-11-19）**：
   - 本机 Firefox Developer Edition 161.0（`D:\Firefox Developer Edition`）完成 29/29 场景：未签名 `.xpi` 安装、选项页配对、真实划词→查询→Anki 制卡、同词同句/不同句、中文页、Anki 关闭与重试、令牌轮换、重启保留、Wikipedia 英/中与 BBC 各 3 次划词、端口冲突、桥接鉴权/CORS。
   - 自动化在 [.agents/automation/m3-firefox](../../automation/m3-firefox/)：自带 Marionette 客户端（无 geckodriver/selenium）+ 真实桌面端/Anki/testpage，`python -u run.py` 输出 `artifacts/results.json` 与截图；环境与结果见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 5 节。
@@ -59,21 +68,20 @@
 
 ## 接下来
 
-1. 进入 [PLAN_M4.md](PLAN_M4.md)：远程源、查询缓存、语境辅助（选择器/LLM）与桌面端 UI 接入。
-2. M4 复用 M3 的桥接协议：`lookup_collect_all`、`/v1/sense` 已完成占位（disabled/pending），M4 只需在 `AppState::resolve_sense` 写入 `SenseResolution`，扩展无需改端点。
+1. 进入 [PLAN_M5.md](PLAN_M5.md)：视觉与文案收尾、许可证清单、README 与脚本文档、性能复测、`.xpi` 发布流程。
+2. M4 已把 `/v1/sense` 从占位接成真实 `SenseResolution`，扩展无需改端点；M5 只需文案与发布调整。若 M5 决定让扩展采用 AI 释义，需要新增桥接字段与扩展交互。
 
-## 代码影响检查（M3 已落地，M4 仍需改）
+## 代码影响检查（M4 已落地，M5 关注）
 
-- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 扩展为应用状态中心；M3 在 `state` 加 `lookup_collect_all` 与语境查询环形缓存（`mark_sense_pending`/`resolve_sense`），`registry` 加 `enabled_source_handles`。M4 在这里接 `EventSink` 远程事件与缓存。
-- `src-tauri/src/bridge/`：M3 新增；M4 只需让 `/v1/sense` 返回 `SenseResolution`，不改路由与鉴权。
-- `src-tauri/src/db/`：M2 新增 `saved_cards` + 指纹；M4 加 `lookup_cache`/`sense_cache` 与清理命令。
-- `src-tauri/src/anki/export.rs`：M2 新增导出（剥离媒体、同语境检查）；M4 追加 AI 标签与 `AI · <model>` 来源。
-- `src-tauri/src/commands.rs`、`lib.rs`、`shortcut.rs`、`window.rs`：M2 定型命令表与生命周期，M3 加桥接命令（`get_bridge_status`、`regenerate_bridge_token`）与 `BridgeService` 管理；M4 加语境命令。
-- `src/lib/{types,ipc,events}.ts`：M2 定稿 DTO 与事件，M3 加 `BridgeStatus` 与 `bridge://status`；M4 增远程/语境类型。`src/components` 为共享原语。
-- `src/windows/{popup,manager,settings}`：M2 已实现，M3 填完设置页“浏览器扩展”分区；M4 在设置页填语境辅助/缓存，在弹窗填推荐条/AI 卡。
-- `extension/`：M3 新增完整 WXT 工程；M4/M5 只在 options 文案与发布流程上调整，不改桥接端点。
-- 数据库已有 `saved_cards`；M4 加 `lookup_cache`、`sense_cache` 表与迁移。
-- `src-tauri/tauri.conf.json`/`capabilities/default.json`：桥接是进程内 axum，不新增 Tauri 权限，M3 未改动两文件。
+- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 成为状态中心；M3 加 `lookup_collect_all` 与语境环形缓存；M4 加 `events`、`sense/`，`QueryRouter` 改为 `lookup_planned`（同步结果 + 远程任务计划），`state` 接入 `CacheStore`、远程任务执行与语境解析。M5 主要是文案与视觉，不改这些契约。
+- `src-tauri/src/bridge/`：M3 新增；M4 让 `/v1/selection` 后台解析语境并写入 `/v1/sense` 响应，鉴权与路由未变。
+- `src-tauri/src/db/`：M2 `saved_cards`；M4 加 `lookup_cache`/`sense_cache`（同一 `cache.db`，`user_version=2`）。
+- `src-tauri/src/anki/`：M2 导出；M4 支持 `AnkiPayload.tags`（AI 卡 `ai-generated`）与 `AI · <model>` 来源。
+- `src-tauri/src/commands.rs`、`lib.rs`：M4 加缓存/语境命令；M5 若加新命令需同步 `src/lib/ipc.ts` 与 BACKEND_STRUCTURE。
+- `src/lib/{types,ipc,events}.ts`：M4 增远程源 union、`CacheStats`、`TestResult.raw_preview/error`、`AnkiPayload.tags`、`SenseResolution.candidates`、`lookup.sentence`。
+- `src/windows/{popup,manager,settings}`：M4 完成远程源编辑/测试、缓存与语境设置、弹窗推荐/AI/远程状态；M5 只做视觉与文案。
+- `extension/`：M3 完整工程；M4 未改代码（桥接兼容），M5 调整 options 文案与发布流程。
+- `src-tauri/tauri.conf.json`/`capabilities/default.json`：M4 未新增 Tauri 权限。
 
 
 ## 已知问题与阻塞
@@ -92,6 +100,9 @@
 - 工作区沙箱下 cargo 走 Schannel 会报 `SEC_E_NO_CREDENTIALS`；需要在可联网的普通终端 `cargo fetch`/`build`。`git` 用 `-c http.sslBackend=openssl` 可访问 GitHub。
 - pnpm 11 在 Windows 默认 junction 布局会让 ESLint 解析不到传递依赖；仓库用 `pnpm-workspace.yaml` 的 `nodeLinker: hoisted` 规避。
 - Git 直接使用 Schannel 克隆 GitHub 会报 `SEC_E_NO_CREDENTIALS`；使用 `git -c http.sslBackend=openssl` 可克隆。
+- **M4 性能偏差**：计划 T4.10 写“远程超时 ≤配置+200ms”，但契约要求超时最多重试 1 次 + 150ms 间隔，实测 300ms 配置为 762.5ms（≈2×+150）。实现优先契约；`local_first`/`aggregate` 远程在后台，不拖首屏，只有 `first_hit` 同步等待。详见 [M4-remote-baseline](../notes/M4-remote-baseline.md) §4。
+- **M4 已知限制**：弹窗推荐为“条目级徽标 + 义项切换列表”，不对整段词典 HTML 做子串高亮；扩展读取语境建议但不可采用 AI 释义；迟到的原句补写不会重新触发语境请求。详见 [M4-sense-baseline](../notes/M4-sense-baseline.md) §5。
+- **M4 依赖新增**：`jsonpath-rust =1.0.6`、`rquickjs 0.14.0`（`default-features=false`，关闭 rust-alloc 以保证 `set_memory_limit` 生效）。已写入 [TECH_STACK](../../docs/TECH_STACK.md)。
 
 ## 关键决策
 
@@ -118,3 +129,8 @@
 - 扩展句子提取优先 `Intl.Segmenter`，缺失时按中英文标点回退；块文本 ≤300 字符直接用整块，避免过度切分。
 - 扩展按 BACKEND_STRUCTURE §5.2 白名单透出桥接错误码（Anki/限流/体积/请求类），未知码回落 `SERVER_ERROR`；保存失败同时显示标题、建议动作、服务端文案与码。
 - content script 的 Tailwind 浮层在 `.lg-interactive` 作用域自行声明 `--tw-border-style`/`--tw-*shadow` 默认值，规避 Firefox Shadow DOM 不应用 `@property` 的问题。
+- M4 缓存只覆盖远程源（网络慢），本地 MDX 不缓存；查询键复用 NFKC+小写归一化，正/负缓存共用一张表。
+- M4 `first_hit` 的远程源同步查询以保持“首个命中即停止”；`local_first`/`aggregate` 的远程源一律后台任务，首屏只等本地与缓存。
+- M4 语境结果只在成功状态（selected/ambiguous/low_confidence）写 `sense_cache`；key 含 model 与 prompt version，拒绝把失败缓存成空结果。
+- M4 的 `AnkiPayload` 增加可选 `tags`：AI 卡由前端写 `AI · <model>` 与 `ai-generated`，后端只做标签合并与转义，不推断来源。
+- M4 的 `SenseResolution` 携带 `candidates` 快照，UI 才有义项切换与推荐依据；`Entry[]` 始终不被修改。
