@@ -88,6 +88,12 @@ pub fn run() {
             commands::open_config_dir,
             commands::get_bridge_status,
             commands::regenerate_bridge_token,
+            commands::get_cache_stats,
+            commands::clear_lookup_cache,
+            commands::clear_sense_cache,
+            commands::get_sense_resolution,
+            commands::test_sense_selector,
+            commands::test_llm,
         ])
         .setup(move |app| {
             core::window::mark_main_thread();

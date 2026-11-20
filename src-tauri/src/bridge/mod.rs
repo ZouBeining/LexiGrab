@@ -91,7 +91,7 @@ impl BridgeBackend for AppBridge {
 
         // 本地媒体在浏览器里不可用：剥离成 [图片]/[音频] 占位，
         // 复用导出管线的清洗，避免把 mdx-res 链接注入页面。
-        let entries = collected
+        let entries: Vec<crate::core::entry::Entry> = collected
             .entries
             .into_iter()
             .map(|mut entry| {
@@ -106,6 +106,25 @@ impl BridgeBackend for AppBridge {
         let sense_available = settings.sense.enabled && request.has_sentence();
         if sense_available {
             state.mark_sense_pending(&query_id);
+            // 语境推荐不阻塞扩展首屏：后台解析，完成后写环形缓存并广播事件。
+            let app = self.app.clone();
+            let query_id_for_task = query_id.clone();
+            let word = request.word.clone();
+            let sentence = request.sentence.clone().unwrap_or_default();
+            let sense_entries = entries.clone();
+            std::thread::spawn(move || {
+                let state = app.state::<AppState>();
+                let resolution = state.run_sense_resolution(
+                    &query_id_for_task,
+                    &word,
+                    Some(&sentence),
+                    &sense_entries,
+                );
+                state.store_sense_resolution(&query_id_for_task, &resolution);
+                if let Err(error) = app.emit("lookup://sense-result", &resolution) {
+                    tracing::warn!(error = %error, "发送语境推荐事件失败");
+                }
+            });
         }
 
         Ok(SelectionResponse {

@@ -11,9 +11,11 @@ use crate::anki::export::{export_to_anki as run_export, ExportDeps};
 use crate::core::config::Settings;
 use crate::core::entry::{AnkiPayload, Entry, SourceConfig, SourceKind};
 use crate::core::error::{IpcError, IpcResult};
+use crate::core::events::TauriEventSink;
 use crate::core::registry::SourceStateEntry;
 use crate::core::state::{AppState, CaptureStats, QueryMeta, RuntimeStatus};
 use crate::core::{shortcut, window};
+use crate::db::cache::CacheStats;
 use crate::db::CardContext;
 use crate::platform::selection::CaptureError;
 use crate::platform::{CaptureResult, SelectionContext};
@@ -37,10 +39,20 @@ pub struct AnkiModelInfo {
 
 /// 查询测试结果。
 #[derive(Debug, Clone, Serialize)]
+pub struct TestFailure {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct TestResult {
     pub entries: Vec<Entry>,
     pub source_name: String,
     pub elapsed_ms: f64,
+    /// 远程响应前 4KB；本地源为 null。
+    pub raw_preview: Option<String>,
+    /// 远程查询失败时的可读错误；本地源失败仍以 IPC 错误返回。
+    pub error: Option<TestFailure>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -141,27 +153,78 @@ pub fn get_runtime_status(app: AppHandle, state: State<'_, AppState>) -> Runtime
     }
 }
 
-/// 同步查询：本地词典查询放在 blocking 线程，避免阻塞异步运行时。
+/// 同步查询：本地与缓存结果放在 blocking 线程；远程任务转后台线程，结果通过事件追加。
 #[tauri::command]
 pub async fn lookup(
     app: AppHandle,
     query: String,
     source_ids: Option<Vec<String>>,
     query_id: Option<String>,
+    sentence: Option<String>,
 ) -> IpcResult<Vec<Entry>> {
     let id = query_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let handle = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let lookup_id = id.clone();
+    let lookup_query = query.clone();
+    let (entries, jobs) = tauri::async_runtime::spawn_blocking(move || {
         let state = handle.state::<AppState>();
-        state.lookup(
-            &query,
-            source_ids.as_deref(),
-            &id,
-            &crate::core::runtime::NullSink,
-        )
+        let sink = TauriEventSink::new(handle.clone());
+        let outcome =
+            state.lookup_planned(&lookup_query, source_ids.as_deref(), &lookup_id, &sink)?;
+        Ok::<_, IpcError>((outcome.entries, outcome.remote_jobs))
     })
     .await
-    .map_err(join_error)?
+    .map_err(join_error)??;
+
+    for job in jobs {
+        let handle = app.clone();
+        let query = query.clone();
+        let query_id = id.clone();
+        std::thread::spawn(move || {
+            let state = handle.state::<AppState>();
+            let sink = TauriEventSink::new(handle.clone());
+            state.run_remote_job(&job, &query, &query_id, &sink);
+        });
+    }
+
+    if let Some(sentence) = sentence
+        .as_deref()
+        .map(str::trim)
+        .filter(|sentence| !sentence.is_empty())
+    {
+        spawn_sense_resolution(&app, &id, &query, sentence, &entries);
+    }
+
+    Ok(entries)
+}
+
+/// 后台解析语境推荐；首屏不等待，结果通过 `lookup://sense-result` 通知。
+fn spawn_sense_resolution(
+    app: &AppHandle,
+    query_id: &str,
+    headword: &str,
+    sentence: &str,
+    entries: &[Entry],
+) {
+    let state = app.state::<AppState>();
+    if !state.settings().sense.enabled || entries.is_empty() {
+        return;
+    }
+    state.mark_sense_pending(query_id);
+    let handle = app.clone();
+    let query_id = query_id.to_string();
+    let headword = headword.to_string();
+    let sentence = sentence.to_string();
+    let entries = entries.to_vec();
+    std::thread::spawn(move || {
+        let state = handle.state::<AppState>();
+        let resolution =
+            state.run_sense_resolution(&query_id, &headword, Some(&sentence), &entries);
+        state.store_sense_resolution(&query_id, &resolution);
+        if let Err(error) = handle.emit("lookup://sense-result", &resolution) {
+            tracing::warn!(error = %error, "发送语境推荐事件失败");
+        }
+    });
 }
 
 #[tauri::command]
@@ -222,6 +285,10 @@ pub fn update_source(
     ensure_no_duplicate_paths(&state, &settings, &config)?;
     settings.sources[index] = config.clone();
     state.replace_settings(settings)?;
+    // 源配置变化后旧缓存不再可信。
+    if let Err(error) = state.cache().invalidate_source(&config.id) {
+        tracing::warn!(error = %error, source_id = %config.id, "清理数据源缓存失败");
+    }
     spawn_reload(&app);
     Ok(config)
 }
@@ -239,6 +306,9 @@ pub fn remove_source(app: AppHandle, state: State<'_, AppState>, id: String) -> 
         ));
     }
     state.replace_settings(settings)?;
+    if let Err(error) = state.cache().invalidate_source(&id) {
+        tracing::warn!(error = %error, source_id = %id, "清理数据源缓存失败");
+    }
     spawn_reload(&app);
     Ok(())
 }
@@ -254,13 +324,46 @@ pub async fn test_source_query(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
         let started = Instant::now();
-        let source = LocalFileSource::open(config.clone(), &state.paths.config_dir);
-        let entries = source.lookup(&query).map_err(IpcError::from)?;
-        Ok(TestResult {
-            entries,
-            source_name: config.name,
-            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
-        })
+        match &config.kind {
+            SourceKind::LocalFile { .. } => {
+                let source = LocalFileSource::open(config.clone(), &state.paths.config_dir);
+                let entries = source.lookup(&query).map_err(IpcError::from)?;
+                Ok(TestResult {
+                    entries,
+                    source_name: config.name,
+                    elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+                    raw_preview: None,
+                    error: None,
+                })
+            }
+            SourceKind::RemoteHttp { .. } => {
+                let outcome = crate::sources::remote_http::test_query(
+                    &config,
+                    &state.paths.config_dir,
+                    &query,
+                );
+                let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+                match outcome {
+                    Ok(outcome) => Ok(TestResult {
+                        entries: outcome.entries,
+                        source_name: config.name,
+                        elapsed_ms,
+                        raw_preview: outcome.raw_preview,
+                        error: None,
+                    }),
+                    Err(failure) => Ok(TestResult {
+                        entries: Vec::new(),
+                        source_name: config.name,
+                        elapsed_ms,
+                        raw_preview: failure.raw_preview,
+                        error: Some(TestFailure {
+                            code: failure.error.code().to_string(),
+                            message: failure.error.to_string(),
+                        }),
+                    }),
+                }
+            }
+        }
     })
     .await
     .map_err(join_error)?
@@ -370,6 +473,138 @@ pub async fn probe_anki(app: AppHandle) -> AnkiStatus {
         version: None,
         message: Some(format!("Anki 探测线程异常: {error}")),
     })
+}
+
+/// 清理结果的统一形状：`{ removed }`。
+#[derive(Debug, Clone, Serialize)]
+pub struct ClearResult {
+    pub removed: u64,
+}
+
+/// 缓存统计：设置页“缓存”分区。
+#[tauri::command]
+pub async fn get_cache_stats(app: AppHandle) -> IpcResult<CacheStats> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state.cache().stats().map_err(IpcError::from)
+    })
+    .await
+    .map_err(join_error)?
+}
+
+/// 清除词典缓存；保留 `saved_cards` 历史与语境缓存（契约 §3）。
+#[tauri::command]
+pub async fn clear_lookup_cache(app: AppHandle) -> IpcResult<ClearResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state
+            .cache()
+            .clear_lookup()
+            .map(|removed| ClearResult { removed })
+            .map_err(IpcError::from)
+    })
+    .await
+    .map_err(join_error)?
+}
+
+/// 读取已完成或进行中的语境推荐；未知/过期返回 null。
+#[tauri::command]
+pub fn get_sense_resolution(
+    state: State<'_, AppState>,
+    query_id: String,
+) -> Option<crate::core::sense::SenseResolution> {
+    state.sense_resolution(&query_id)
+}
+
+/// 设置页测试选择器：只测连通与返回结构，不写缓存、不写卡。
+#[tauri::command]
+pub async fn test_sense_selector(
+    app: AppHandle,
+    word: String,
+    sentence: String,
+) -> IpcResult<crate::core::sense::SenseResolution> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let settings = state.settings();
+        let word = word.trim().to_string();
+        let sentence = sentence.trim().to_string();
+        let mut resolution = crate::core::sense::SenseResolution {
+            query_id: "test".to_string(),
+            headword: word.clone(),
+            status: crate::core::sense::SenseStatus::Disabled,
+            selected_sense_id: None,
+            confidence: None,
+            selector_model: None,
+            ai: None,
+            error: None,
+            candidates: Vec::new(),
+        };
+        if !settings.sense.enabled {
+            resolution.error = Some("SENSE_DISABLED: 语境辅助未启用".to_string());
+            return Ok(resolution);
+        }
+        if word.is_empty() || sentence.is_empty() {
+            resolution.status = crate::core::sense::SenseStatus::NoContext;
+            resolution.error = Some("SENSE_NO_CONTEXT: 需要单词与原句".to_string());
+            return Ok(resolution);
+        }
+        match crate::core::sense::select(&settings.sense, &word, &sentence, &[]) {
+            Ok(reply) => {
+                let confidence = reply.confidence.unwrap_or(0.0);
+                resolution.status = if confidence >= settings.sense.high_confidence {
+                    crate::core::sense::SenseStatus::Selected
+                } else if confidence > settings.sense.low_confidence {
+                    crate::core::sense::SenseStatus::Ambiguous
+                } else {
+                    crate::core::sense::SenseStatus::LowConfidence
+                };
+                resolution.confidence = Some(confidence);
+                resolution.selector_model = reply.model;
+            }
+            Err(error) => {
+                resolution.status = crate::core::sense::SenseStatus::Unavailable;
+                resolution.error = Some(format!("{}: {}", error.code(), error.message()));
+            }
+        }
+        Ok(resolution)
+    })
+    .await
+    .map_err(join_error)?
+}
+
+/// 设置页测试 LLM：不写缓存、不写卡；未启用时仍允许测试连通性。
+#[tauri::command]
+pub async fn test_llm(
+    app: AppHandle,
+    word: String,
+    sentence: String,
+    senses: Option<Vec<crate::core::sense::SenseCandidate>>,
+) -> IpcResult<crate::core::sense::AiDefinition> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut settings = state.settings().llm;
+        settings.enabled = true;
+        let senses = senses.unwrap_or_default();
+        crate::core::sense::generate(&settings, word.trim(), sentence.trim(), &senses, None)
+            .map_err(|error| IpcError::new(error.code(), error.message()))
+    })
+    .await
+    .map_err(join_error)?
+}
+
+/// 清除语境缓存。
+#[tauri::command]
+pub async fn clear_sense_cache(app: AppHandle) -> IpcResult<ClearResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state
+            .cache()
+            .clear_sense()
+            .map(|removed| ClearResult { removed })
+            .map_err(IpcError::from)
+    })
+    .await
+    .map_err(join_error)?
 }
 
 #[tauri::command]
