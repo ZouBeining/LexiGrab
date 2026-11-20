@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { CardContext, Entry, IpcError, SelectionContext } from "../../lib/types";
+import type { RemoteLookupResult } from "../../lib/events";
+import type {
+  CardContext,
+  Entry,
+  IpcError,
+  QueryMeta,
+  SelectionContext,
+  SenseCandidate,
+  SenseResolution,
+} from "../../lib/types";
 import {
   buildAnkiPayload,
+  hasSentence,
   initialState,
   popupReducer,
+  saveButtonLabel,
+  shouldShowAiCard,
   type PopupAction,
   type PopupState,
 } from "./state";
@@ -35,6 +47,40 @@ const entry = (overrides: Partial<Entry> = {}): Entry => ({
 const ipcError = (code: string, message = "出错了"): IpcError => ({ code, message, detail: null });
 
 const warning: CardContext = { seen: true, note_id: 42, created_at: 1_700_000_000_000 };
+
+const candidate = (overrides: Partial<SenseCandidate> = {}): SenseCandidate => ({
+  id: "e0-s1",
+  entry_index: 0,
+  source_name: "Mini",
+  headword: "serendipity",
+  part_of_speech: "noun",
+  definition_text: "意外发现珍奇事物的本领",
+  definition_html: "<div>意外发现珍奇事物的本领</div>",
+  ...overrides,
+});
+
+const remoteResult = (overrides: Partial<RemoteLookupResult> = {}): RemoteLookupResult => ({
+  query_id: "q-1",
+  source_id: "remote-1",
+  source_name: "Remote",
+  entries: [entry({ source_name: "Remote", definition_html: "<p>远程释义</p>" })],
+  cached: false,
+  elapsed_ms: 42,
+  ...overrides,
+});
+
+const senseResolution = (overrides: Partial<SenseResolution> = {}): SenseResolution => ({
+  query_id: "q-1",
+  headword: "serendipity",
+  status: "selected",
+  selected_sense_id: "e0-s1",
+  confidence: 0.86,
+  selector_model: "jev-like",
+  ai: null,
+  error: null,
+  candidates: [candidate()],
+  ...overrides,
+});
 
 const run = (state: PopupState, ...actions: PopupAction[]): PopupState =>
   actions.reduce(popupReducer, state);
@@ -426,6 +472,259 @@ describe("popupReducer save flow", () => {
   });
 });
 
+describe("popupReducer remote sources", () => {
+  it("initializes pending remote count and cached sources from query meta", () => {
+    const state = withResults();
+    const meta: QueryMeta = {
+      query_id: "q-1",
+      cached_sources: [{ source_id: "remote-1", source_name: "Remote" }],
+      pending_remote: 2,
+    };
+
+    const updated = popupReducer(state, { type: "query-meta-received", queryId: "q-1", meta });
+
+    expect(updated.pendingRemote).toBe(2);
+    expect(updated.cachedSources).toEqual([{ source_id: "remote-1", source_name: "Remote" }]);
+  });
+
+  it("ignores query meta for a stale query id", () => {
+    const state = withResults();
+    const meta: QueryMeta = {
+      query_id: "q-0",
+      cached_sources: [],
+      pending_remote: 3,
+    };
+
+    const updated = popupReducer(state, { type: "query-meta-received", queryId: "q-0", meta });
+
+    expect(updated).toBe(state);
+  });
+
+  it("appends remote entries, dedupes repeated payloads and decrements pending", () => {
+    const state = run(withResults(), {
+      type: "query-meta-received",
+      queryId: "q-1",
+      meta: { query_id: "q-1", cached_sources: [], pending_remote: 1 },
+    });
+
+    const first = popupReducer(state, { type: "remote-result", result: remoteResult() });
+    expect(first.entries).toHaveLength(2);
+    expect(first.entries[1]?.source_name).toBe("Remote");
+    expect(first.pendingRemote).toBe(0);
+
+    const duplicate = popupReducer(first, { type: "remote-result", result: remoteResult() });
+    expect(duplicate.entries).toHaveLength(2);
+    expect(duplicate.pendingRemote).toBe(0);
+  });
+
+  it("marks a cached remote source with the cache badge data", () => {
+    const state = withResults();
+    const updated = popupReducer(state, {
+      type: "remote-result",
+      result: remoteResult({ cached: true }),
+    });
+
+    expect(updated.cachedSources).toEqual([{ source_id: "remote-1", source_name: "Remote" }]);
+  });
+
+  it("fills an empty result with a late remote entry", () => {
+    const empty = withResults([]);
+    expect(empty.phase).toBe("empty");
+
+    const updated = popupReducer(empty, { type: "remote-result", result: remoteResult() });
+
+    expect(updated.phase).toBe("results");
+    expect(updated.contentPhase).toBe("results");
+    expect(updated.draftDefinition).toBe("<p>远程释义</p>");
+  });
+
+  it("records a remote error without touching the main result", () => {
+    const state = run(withResults(), {
+      type: "query-meta-received",
+      queryId: "q-1",
+      meta: { query_id: "q-1", cached_sources: [], pending_remote: 1 },
+    });
+
+    const failed = popupReducer(state, {
+      type: "remote-error",
+      error: {
+        query_id: "q-1",
+        source_id: "remote-1",
+        code: "REMOTE_TIMEOUT",
+        message: "远程源超时",
+      },
+    });
+
+    expect(failed.entries).toEqual(state.entries);
+    expect(failed.phase).toBe("results");
+    expect(failed.error).toBeNull();
+    expect(failed.pendingRemote).toBe(0);
+    expect(failed.remoteErrors).toHaveLength(1);
+  });
+
+  it("ignores remote results and errors for a stale query id", () => {
+    const state = withResults();
+    const loading = popupReducer(state, {
+      type: "selection-received",
+      selection: selection({ text: "bank" }),
+      queryId: "q-2",
+    });
+
+    expect(popupReducer(loading, { type: "remote-result", result: remoteResult() })).toBe(loading);
+    expect(
+      popupReducer(loading, {
+        type: "remote-error",
+        error: { query_id: "q-1", source_id: "remote-1", code: "X", message: "失败" },
+      }),
+    ).toBe(loading);
+  });
+});
+
+describe("popupReducer sense assistance", () => {
+  const twoSenses = [
+    candidate(),
+    candidate({
+      id: "e0-s2",
+      definition_text: "河岸",
+      definition_html: "<div>河岸</div>",
+    }),
+  ];
+
+  it("auto-selects the high-confidence recommendation and saves that sense", () => {
+    const state = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({ candidates: twoSenses }),
+    });
+
+    expect(state.selectedSenseId).toBe("e0-s1");
+    expect(state.aiInUse).toBe(false);
+    expect(saveButtonLabel(state)).toBe("保存所选义项");
+
+    const payload = buildAnkiPayload(state);
+    expect(payload.definition_html).toBe("<div>意外发现珍奇事物的本领</div>");
+    expect(payload.source).toBe("Mini");
+    expect(payload.tags).toEqual([]);
+  });
+
+  it("does not auto-select for ambiguous confidence", () => {
+    const state = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({ status: "ambiguous", confidence: 0.62 }),
+    });
+
+    expect(state.selectedSenseId).toBeNull();
+    expect(saveButtonLabel(state)).toBe("保存全部释义");
+    expect(buildAnkiPayload(state).definition_html).toBe(entry().definition_html);
+  });
+
+  it("does not auto-select for low confidence", () => {
+    const state = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({ status: "low_confidence", selected_sense_id: null, confidence: 0.3 }),
+    });
+
+    expect(state.selectedSenseId).toBeNull();
+    expect(saveButtonLabel(state)).toBe("保存全部释义");
+  });
+
+  it("keeps a user-picked sense when a later recommendation arrives", () => {
+    const recommended = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({ candidates: twoSenses }),
+    });
+    const userPicked = popupReducer(recommended, { type: "sense-selected", senseId: "e0-s2" });
+    expect(userPicked.selectedSenseId).toBe("e0-s2");
+
+    const late = popupReducer(userPicked, {
+      type: "sense-received",
+      resolution: senseResolution({ candidates: twoSenses, confidence: 0.95 }),
+    });
+
+    expect(late.selectedSenseId).toBe("e0-s2");
+    expect(buildAnkiPayload(late).definition_html).toBe("<div>河岸</div>");
+  });
+
+  it("keeps a user-picked entry when a later recommendation arrives", () => {
+    const state = popupReducer(withResults(), { type: "entry-selected", index: 0 });
+    const late = popupReducer(state, {
+      type: "sense-received",
+      resolution: senseResolution(),
+    });
+
+    expect(late.selectedSenseId).toBeNull();
+  });
+
+  it("ignores a sense result for a stale query id", () => {
+    const state = withResults();
+    const stale = popupReducer(state, {
+      type: "sense-received",
+      resolution: senseResolution({ query_id: "q-0" }),
+    });
+
+    expect(stale).toBe(state);
+  });
+
+  it("keeps the AI card unselected until the user adopts it", () => {
+    const ai = {
+      definition_text: "river <bank> & shore",
+      part_of_speech: "noun",
+      model: "llama3",
+      confidence: 0.6,
+      based_on_sense_id: null,
+      generated_at: 1,
+    };
+    const state = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({ status: "low_confidence", selected_sense_id: null, ai }),
+    });
+
+    expect(state.aiInUse).toBe(false);
+    expect(state.selectedSenseId).toBeNull();
+    expect(shouldShowAiCard(state)).toBe(true);
+    expect(buildAnkiPayload(state).source).toBe("Mini");
+
+    const adopted = popupReducer(state, { type: "ai-in-use-requested" });
+    expect(adopted.phase).toBe("editing");
+    expect(adopted.aiInUse).toBe(true);
+    expect(adopted.draftDefinition).toBe("<div>river &lt;bank&gt; &amp; shore</div>");
+
+    const payload = buildAnkiPayload(adopted);
+    expect(payload.source).toBe("AI · llama3");
+    expect(payload.tags).toEqual(["ai-generated"]);
+    expect(payload.definition_html).toBe("<div>river &lt;bank&gt; &amp; shore</div>");
+  });
+
+  it("hides the AI card when a selected resolution has a matching candidate", () => {
+    const state = run(withResults(), {
+      type: "sense-received",
+      resolution: senseResolution({
+        ai: {
+          definition_text: "AI 释义",
+          part_of_speech: null,
+          model: "llama3",
+          confidence: null,
+          based_on_sense_id: "e0-s1",
+          generated_at: 1,
+        },
+      }),
+    });
+
+    expect(shouldShowAiCard(state)).toBe(false);
+  });
+});
+
+describe("hasSentence", () => {
+  it("is false when neither the selection nor the draft carries a sentence", () => {
+    const state = withResults([entry()], selection({ sentence: null }));
+
+    expect(hasSentence(state)).toBe(false);
+  });
+
+  it("is true for a captured sentence", () => {
+    expect(hasSentence(withResults())).toBe(true);
+  });
+});
+
 describe("buildAnkiPayload", () => {
   it("uses the selected entry in quick mode", () => {
     const state = withResults([
@@ -439,6 +738,7 @@ describe("buildAnkiPayload", () => {
       definition_html: "<p>第二个</p>",
       sentence: "It was pure serendipity that we met.",
       source: "Other",
+      tags: [],
     });
   });
 
@@ -455,6 +755,7 @@ describe("buildAnkiPayload", () => {
       definition_html: "<p>自制释义</p>",
       sentence: null,
       source: "",
+      tags: [],
     });
   });
 });

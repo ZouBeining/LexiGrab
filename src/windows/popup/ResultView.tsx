@@ -6,8 +6,8 @@ import { DefinitionView } from "./DefinitionView";
 export interface ResultViewProps {
   entries: Entry[];
   selectedEntryIndex: number;
-  /** M4 sense recommendation; always null in M2 so the bar never renders. */
-  recommendedSenseId?: string | null;
+  /** Entry that contains the recommended sense; marked with a text chip. */
+  recommendedEntryIndex?: number | null;
   onSelectEntry?: (index: number) => void;
   className?: string;
 }
@@ -19,7 +19,7 @@ export interface ResultViewProps {
 export function ResultView({
   entries,
   selectedEntryIndex,
-  recommendedSenseId = null,
+  recommendedEntryIndex = null,
   onSelectEntry,
   className,
 }: ResultViewProps) {
@@ -31,26 +31,18 @@ export function ResultView({
   };
   return (
     <div className={["flex flex-col gap-2", className].filter(Boolean).join(" ")}>
-      {recommendedSenseId ? (
-        <div
-          role="note"
-          aria-label="语境推荐"
-          className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-canvas-soft px-3 text-xs text-ink"
-        >
-          <span className="font-medium">推荐义项</span>
-          <span className="text-ink-muted">参考语境选择，可继续切换</span>
-        </div>
-      ) : null}
-
       <ul role="radiogroup" aria-label="词典义项" className="divide-y divide-hairline">
         {entries.map((entry, index) => {
           const selected = index === selectedEntryIndex;
+          const recommended = index === recommendedEntryIndex;
           return (
             <li key={`${entry.source_name}:${entry.headword}:${index}`}>
               <div
                 role="radio"
                 aria-checked={selected}
-                aria-label={`${entry.headword} · ${entry.source_name}`}
+                aria-label={`${entry.headword} · ${entry.source_name}${
+                  recommended ? "，语境推荐" : ""
+                }`}
                 tabIndex={0}
                 onClick={() => onSelectEntry?.(index)}
                 onKeyDown={(event) => handleKeyDown(event, index)}
@@ -69,6 +61,11 @@ export function ResultView({
                     {entry.phonetic ? (
                       <span className="truncate font-mono text-[11px] tracking-[0.6px] text-ink-muted">
                         {entry.phonetic}
+                      </span>
+                    ) : null}
+                    {recommended ? (
+                      <span className="shrink-0 rounded-full border border-hairline px-1.5 text-[10px] leading-4 text-ink">
+                        推荐
                       </span>
                     ) : null}
                   </div>

@@ -3,11 +3,20 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { SourceBadge } from "../../components/SourceBadge";
-import { onHotkeyError, onPopupCaptureError, onPopupSelection } from "../../lib/events";
+import {
+  onHotkeyError,
+  onPopupCaptureError,
+  onPopupSelection,
+  onRemoteLookupError,
+  onRemoteLookupResult,
+  onSenseResult,
+} from "../../lib/events";
 import {
   checkCardContext,
   exportToAnki,
   getCurrentSelection,
+  getQueryMeta,
+  getSenseResolution,
   getSettings,
   hidePopup,
   lookup,
@@ -25,13 +34,18 @@ import type {
 } from "../../lib/types";
 import { ContextWarningBar } from "./ContextWarningBar";
 import { EditView } from "./EditView";
+import { RemoteStatus } from "./RemoteStatus";
 import { ResultView } from "./ResultView";
+import { SenseAssistant } from "./SenseAssistant";
 import {
   activeEntry,
   buildAnkiPayload,
   displayWord,
+  hasSentence,
+  highlightedEntryIndex,
   initialState,
   popupReducer,
+  saveButtonLabel,
 } from "./state";
 
 const NOT_CAPTURED: IpcError = {
@@ -229,8 +243,33 @@ export function PopupApp() {
     const queryId = createQueryId();
     selectionTextRef.current = selection.text;
     dispatch({ type: "selection-received", selection, queryId });
-    lookup({ query: selection.text, queryId })
-      .then((entries) => dispatch({ type: "lookup-succeeded", queryId, entries }))
+    const sentence = selection.sentence?.trim() || null;
+    lookup({ query: selection.text, queryId, sentence })
+      .then((entries) => {
+        dispatch({ type: "lookup-succeeded", queryId, entries });
+        // QueryMeta is read after lookup so pending/cached counts match this query.
+        void getQueryMeta(queryId)
+          .then((meta) => {
+            if (meta) {
+              dispatch({ type: "query-meta-received", queryId, meta });
+            }
+          })
+          .catch(() => {
+            // Metadata only drives progress/cache hints; a failure keeps results usable.
+          });
+        // Event fallback: the sense result may finish before (or without) the event.
+        if (sentence) {
+          void getSenseResolution(queryId)
+            .then((resolution) => {
+              if (resolution) {
+                dispatch({ type: "sense-received", resolution });
+              }
+            })
+            .catch(() => {
+              // Sense assistance never blocks the dictionary result.
+            });
+        }
+      })
       .catch((error: unknown) =>
         dispatch({ type: "lookup-failed", queryId, error: toIpcError(error) }),
       );
@@ -287,6 +326,9 @@ export function PopupApp() {
         // Hotkey conflicts are surfaced in Settings, not in the popup.
       }),
     );
+    subscribe(onRemoteLookupResult((result) => dispatch({ type: "remote-result", result })));
+    subscribe(onRemoteLookupError((error) => dispatch({ type: "remote-error", error })));
+    subscribe(onSenseResult((resolution) => dispatch({ type: "sense-received", resolution })));
 
     // Events may fire before the listener is ready; always fetch once as a fallback.
     getCurrentSelection()
@@ -448,6 +490,17 @@ export function PopupApp() {
     dispatch({ type: "entry-selected", index });
   }, []);
 
+  const handleSelectSense = useCallback((senseId: string) => {
+    dispatch({ type: "sense-selected", senseId });
+  }, []);
+
+  const handleUseAi = useCallback(() => {
+    void setPopupInteractive(true).catch(() => {
+      // Editing still renders; the backend retries window activation.
+    });
+    dispatch({ type: "ai-in-use-requested" });
+  }, []);
+
   const handleDraftChange = useCallback((field: "word" | "definition" | "sentence", value: string) => {
     dispatch({ type: "draft-changed", field, value });
   }, []);
@@ -455,6 +508,8 @@ export function PopupApp() {
   const entry = activeEntry(state);
   const word = displayWord(state);
   const sourceName = entry?.source_name ?? "";
+  const aiModel = state.sense?.ai?.model ?? null;
+  const effectiveSource = state.aiInUse && aiModel ? `AI · ${aiModel}` : sourceName;
   const isSaving = state.phase === "saving";
   const showEditor =
     state.phase === "editing" ||
@@ -464,7 +519,7 @@ export function PopupApp() {
     return (
       <EditView
         word={word}
-        source={sourceName}
+        source={effectiveSource}
         definition={state.draftDefinition}
         sentence={state.draftSentence}
         error={state.error}
@@ -507,18 +562,25 @@ export function PopupApp() {
         );
       case "empty":
         return (
-          <div className="flex min-h-[300px] items-center justify-center">
-            <EmptyState
-              title="未找到释义"
-              description="当前词典中没有这个单词。可以补充释义后制卡，或先添加词典。"
-              action={
-                <>
-                  <Button onClick={handleEdit}>仍然制卡</Button>
-                  <Button variant="secondary" onClick={() => openTarget("manager")}>
-                    添加词典
-                  </Button>
-                </>
-              }
+          <div className="flex flex-col gap-3">
+            <div className="flex min-h-[300px] items-center justify-center">
+              <EmptyState
+                title="未找到释义"
+                description="当前词典中没有这个单词。可以补充释义后制卡，或先添加词典。"
+                action={
+                  <>
+                    <Button onClick={handleEdit}>仍然制卡</Button>
+                    <Button variant="secondary" onClick={() => openTarget("manager")}>
+                      添加词典
+                    </Button>
+                  </>
+                }
+              />
+            </div>
+            <RemoteStatus
+              pendingRemote={state.pendingRemote}
+              cachedSources={state.cachedSources}
+              errors={state.remoteErrors}
             />
           </div>
         );
@@ -555,12 +617,23 @@ export function PopupApp() {
           <SaveErrorNotice error={state.error} onOpenSettings={() => openTarget("settings")} />
         ) : null}
 
+        {state.entries.length > 0 ? (
+          <SenseAssistant
+            resolution={state.sense}
+            sentenceMissing={!hasSentence(state)}
+            selectedSenseId={state.selectedSenseId}
+            aiInUse={state.aiInUse}
+            onSelectSense={handleSelectSense}
+            onUseAi={handleUseAi}
+          />
+        ) : null}
+
         <div className="max-h-[300px] overflow-y-auto pr-1">
           {state.entries.length > 0 ? (
             <ResultView
               entries={state.entries}
               selectedEntryIndex={state.selectedEntryIndex}
-              recommendedSenseId={null}
+              recommendedEntryIndex={highlightedEntryIndex(state)}
               onSelectEntry={handleSelectEntry}
             />
           ) : (
@@ -569,6 +642,12 @@ export function PopupApp() {
         </div>
 
         <SentencePreview sentence={state.draftSentence} />
+
+        <RemoteStatus
+          pendingRemote={state.pendingRemote}
+          cachedSources={state.cachedSources}
+          errors={state.remoteErrors}
+        />
       </div>
     );
   };
@@ -581,7 +660,7 @@ export function PopupApp() {
             <Button variant="secondary" onClick={handleEdit}>
               编辑
             </Button>
-            <Button onClick={() => void handleSave()}>保存所选义项</Button>
+            <Button onClick={() => void handleSave()}>{saveButtonLabel(state)}</Button>
           </>
         );
       case "saving":
