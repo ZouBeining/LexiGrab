@@ -30,10 +30,10 @@
 ## 2. 当前范围与状态
 
 - 版本 0.1.0，平台只承诺 Windows 10/11；浏览器只验收 Firefox 109+。
-- M0–M4 主体已完成：桌面端、本地/远程词典、缓存、语境辅助、Anki、桥接与扩展；M0 的手工应用矩阵仍可补测。
-- M5 尚未开始：视觉与文案收尾、许可证清单、总 README、发布流程、长跑与安全审查都还未做。
-- 根目录 `README.md` 目前是占位文件，这是刻意状态，不要擅自补写。
-- CI 覆盖前端检查、Rust 检查与根目录测试；扩展测试目前只在本地跑，发布前要补进 CI 或留下手工证据。
+- M0–M5 仓库侧已完成：桌面端、本地/远程词典、缓存、语境辅助、Anki、桥接与扩展；M5 补完设置关于分区、文档、许可证、CI/发布工作流、性能与安全证据。
+- 发布前仍需在目标机器完成：8 小时长跑（`.agents/automation/m5-soak/`）、干净 Windows 虚拟机验收、打 `v0.1.0` tag 触发 release 工作流。详细待办见 PROGRESS“进行中”。
+- 根目录 `README.md` 已重写为面向用户的总览；不要再改回占位文件。
+- CI 覆盖前端检查与构建、扩展测试/构建/lint、Rust 检查、`cargo deny` 与版本同步；tag 发布工作流见 `.github/workflows/release.yml`。
 
 完成定义：功能有实现、有测试、有错误路径、docs 已同步、PROGRESS 已更新，且下面的门禁全部通过。
 
@@ -70,7 +70,7 @@ cd src-tauri && cargo run --bin lexigrab-dev -- lookup --config <config.toml> --
 | 区域 | 文件 | 关键符号与职责 |
 | --- | --- | --- |
 | 启动与生命周期 | `src-tauri/src/lib.rs`、`main.rs` | `run`、命令注册、`mdx-res` 处理、托盘、单实例、退出清理 |
-| 命令层 | `src-tauri/src/commands.rs` | 33 个 `#[tauri::command]`；只做参数整理、`spawn_blocking` 与错误转换 |
+| 命令层 | `src-tauri/src/commands.rs` | 35 个 `#[tauri::command]`；只做参数整理、`spawn_blocking` 与错误转换 |
 | 状态中心 | `core/state.rs` | `AppState`、`lookup_planned`、`run_remote_job`、`lookup_collect_all`、`run_sense_resolution`、`QueryMeta` |
 | 配置 | `core/config.rs` | `Paths::resolve`、`ConfigStore`、`Settings`、schema v2 迁移与校验 |
 | 查询调度 | `core/query_router.rs` | `QueryRouter::{lookup, lookup_planned, run_remote_job}`、三种策略、失败隔离 |
@@ -137,7 +137,7 @@ cd src-tauri && cargo run --bin lexigrab-dev -- lookup --config <config.toml> --
 - 查询：`lookup`、`get_query_meta`、`get_sense_resolution`。
 - 源：`list_sources`、`get_source_statuses`、`add_source`、`update_source`、`remove_source`、`test_source_query`。
 - Anki：`export_to_anki`、`check_card_context`、`get_anki_decks`、`get_anki_models`、`probe_anki`。
-- 设置与桥接：`get_settings`、`update_settings`、`open_config_dir`、`get_bridge_status`、`regenerate_bridge_token`。
+- 设置与桥接：`get_settings`、`update_settings`、`open_config_dir`、`open_log_dir`、`open_cache_dir`、`get_bridge_status`、`regenerate_bridge_token`。
 - 缓存与语境测试：`get_cache_stats`、`clear_lookup_cache`、`clear_sense_cache`、`test_sense_selector`、`test_llm`。
 
 新增命令必须同步五处：`BACKEND_STRUCTURE` 命令表、`commands.rs`、`lib.rs` 注册、`src/lib/{ipc,types}.ts`、调用方测试。命令里不得直接做重活；本地查询、Anki、远程 HTTP 与 SQLite 都走阻塞边界。
@@ -229,14 +229,15 @@ lookup://sense-result      SenseResolution
 | 语境 | 另跑 `sense_tests`、`sense_assist_tests` |
 | 前端 | `pnpm typecheck && pnpm lint && pnpm test`；三窗口至少手工过 loading/empty/error |
 | 扩展 | `pnpm -C extension typecheck && pnpm -C extension test`，再 `build:firefox` + `lint:firefox` |
-| 发布前 | CI 全绿；扩展测试入 CI；`package:firefox` 产物可安装 |
+| 发布前 | CI 全绿（含扩展与 `cargo deny`）；`package:firefox` 产物可安装；跑 [docs/performance.md](docs/performance.md) 的长跑与干净虚拟机验收 |
 
-验收资产：`.agents/automation/m2-manual/`（pywinauto 桌面矩阵）、`m3-firefox/`（Marionette 真机）、`m4-mock/`（远程 mock）。它们需要真实桌面/Anki/Firefox，按脚本 README 运行，产物在各自 `artifacts/`，不要提交。
+验收资产：`.agents/automation/m2-manual/`（pywinauto 桌面矩阵）、`m3-firefox/`（Marionette 真机）、`m4-mock/`（远程 mock）、`m5-soak/`（长跑与 100k 词典 bench）。它们需要真实桌面/Anki/Firefox，按脚本 README 运行，产物在各自 `artifacts/`，不要提交。
 
 ## 10. 已知陷阱
 
 - 计划中的 libmdx 不可达，MDX 实际用 `mdictlib 0.2.8`；不要按旧计划改回。
-- 本机仓库带低完整性标签时，从仓库内启动的 exe 无法 `SendInput` 或写 `%APPDATA%`；自动化把 exe 复制到 `%TEMP%` 运行。
+- 本机仓库带低完整性标签时，从仓库内启动的 exe 无法 `SendInput` 或写 `%APPDATA%`；自动化把 exe 复制到 `%TEMP%` 运行。本机 `%TEMP%` 可能指向其他用户目录且不可写，长跑脚本已回退到 `%LOCALAPPDATA%\Temp`。
+- `LEXIGRAB_HOME` 的配置在 `<home>/config/config.toml`，不是 `<home>/config.toml`；自动化与长跑脚本必须按此布局预置配置，否则应用会用默认端口。
 - MSVC 编译 bundled SQLite 与 aws-lc 会报 D8050；因此 HTTP 用 native-tls，`[profile.dev] debug = 0`，不要随手删。
 - Git/cargo 走 Schannel 可能报 `SEC_E_NO_CREDENTIALS`；git 可加 `-c http.sslBackend=openssl`，cargo 需要可联网的普通终端先 fetch。
 - pnpm 11 在 Windows 默认 junction 布局会让 ESLint 解析失败；仓库用 `nodeLinker: hoisted`。

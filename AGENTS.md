@@ -33,6 +33,7 @@
 
 ```text
 cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+cd src-tauri && cargo deny check licenses bans sources
 pnpm typecheck && pnpm lint && pnpm test
 pnpm -C extension typecheck && pnpm -C extension test
 ```

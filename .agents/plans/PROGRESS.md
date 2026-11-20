@@ -1,6 +1,6 @@
 # PROGRESS
 
-最后更新：2026-11-20。新会话先读本文件，再读当前阶段计划。
+最后更新：2026-11-21。新会话先读本文件，再读当前阶段计划。
 
 ## 已完成
 
@@ -50,6 +50,14 @@
   - 前端：管理器远程源编辑与测试面板；设置页“缓存”“语境辅助”分区；弹窗推荐条/义项切换/AI 卡/远程进度/缓存徽标；AI 卡保存 `AI · <model>` + `ai-generated`。
   - 验收：`.agents/automation/m4-mock/` 用 Python mock + `lexigrab-dev` 跑通 JSONPath/脚本/失败隔离/空结果（8/8）；`cargo test` 328 通过（3 个性能探针默认忽略）、`clippy`/`fmt` 全绿；`pnpm typecheck`/`lint`/`test`（121）/`build` 全绿。
   - 性能：缓存 `get` p95 0.016ms、JSONPath 100 条 p95 1.865ms、选择器额外 2.3ms、本地首屏不等待远程。报告：[M4-remote-baseline](../notes/M4-remote-baseline.md)、[M4-sense-baseline](../notes/M4-sense-baseline.md)。
+- **M5 打磨、文档与发布准备（2026-11-21）**：
+  - 设置/UI：关于分区补构建信息（应用/Tauri/WebView）、配置/日志/缓存目录复制与打开（新命令 `open_log_dir`、`open_cache_dir`）、LICENSE 与仓库链接、重开引导；空态/保存提示补 `role=status`/`aria-live`，错误块统一 `role=alert`；扩展与桌面端 401/离线/端口/令牌文案对齐，AI 标注统一为“AI 生成 · <model> · 可能不准确”。前端测试 121→140。
+  - 文档：重写 [README](../../README.md)；新增 [user-guide](../../docs/user-guide.md)、[configuration](../../docs/configuration.md)、[development](../../docs/development.md)、[extension](../../docs/extension.md)、[troubleshooting](../../docs/troubleshooting.md)、[performance](../../docs/performance.md)、[security](../../docs/security.md) 与 [CHANGELOG](../../CHANGELOG.md)；同步 APP_FLOW §7.3 端口失败行为、TECH_STACK 锁文件版本。
+  - 合规：许可证标识统一 `AGPL-3.0-only`（`Cargo.toml`、两个 `package.json`、SPDX 头）；141 个源文件 SPDX 头（Rust/扩展 81 + 前端 60）；[THIRD_PARTY_LICENSES](../../THIRD_PARTY_LICENSES.md) 覆盖 59 个直接依赖；`src-tauri/deny.toml`；cargo-deny 0.22.0 实跑 `bans ok, licenses ok, sources ok`。
+  - CI/发布：`ci.yml` 增加扩展 typecheck/test/build/lint、`pnpm build`、cargo-deny 与五处版本同步；新增 `release.yml`（tag 触发 NSIS、`.xpi`、SHA256SUMS、草稿 release、未签名说明）；两文件经 actionlint 校验。
+  - 性能：`cache.get` p95 0.021ms、JSONPath 100 条 1.587ms、100k 合成词典本地查询 p95 0.07ms/峰值 13.5MB、选择器额外 4.1ms、远程超时 783.5ms（契约重试）；20 分钟长跑 21 次采样 0 失败，RSS 46.4→46.8MB（+0.79%），句柄 401→400。脚本与数据：[m5-soak](../automation/m5-soak/)、[performance](../../docs/performance.md)。
+  - 安全：十项审查 0 高危；远程/选择器/LLM 请求失败统一 `reqwest::Error::without_url()`，避免完整 URL 进日志；令牌明文、脚本沙箱、未签名等残余风险记录在 [security](../../docs/security.md)。
+  - 发布产物：release exe 13,841,920B、`.xpi` 167,973B（SHA256 见 [M5-release](../notes/M5-release.md)）；NSIS 打包因本机无法访问 GitHub 二进制下载而失败，交给 release 工作流；8 小时长跑、干净 VM 验收与打 tag 仍待执行。
 - **M3 Firefox 真机验收（2026-11-19）**：
   - 本机 Firefox Developer Edition 161.0（`D:\Firefox Developer Edition`）完成 29/29 场景：未签名 `.xpi` 安装、选项页配对、真实划词→查询→Anki 制卡、同词同句/不同句、中文页、Anki 关闭与重试、令牌轮换、重启保留、Wikipedia 英/中与 BBC 各 3 次划词、端口冲突、桥接鉴权/CORS。
   - 自动化在 [.agents/automation/m3-firefox](../automation/m3-firefox/)：自带 Marionette 客户端（无 geckodriver/selenium）+ 真实桌面端/Anki/testpage，`python -u run.py` 输出 `artifacts/results.json` 与截图；环境与结果见 [M3-extension-verification](../notes/M3-extension-verification.md) 第 5 节。
@@ -69,25 +77,31 @@
 
 ## 进行中
 
+- **M5 发布门禁（仓库侧已完成，以下需真实环境）**：
+  - 8 小时长跑：`.agents/automation/m5-soak/` 已就绪，本次只跑 20 分钟冒烟；发布前跑 `--minutes 480` 并把 `artifacts/summary.json` 补进 [performance](../../docs/performance.md) §3.3。
+  - 干净 Windows 虚拟机验收：安装 Anki+AnkiConnect、真实 MDX/MDD、记事本与 Firefox 划词、制卡、扩展配对、远程 mock、断网缓存、重启、卸载；对照 PRD 成功标准与 APP_FLOW 主路径。
+  - 打 `v0.1.0` tag 触发 release 工作流并检查草稿 release；本次未 push、未打 tag。
 - M0 收尾：T0.7 手工应用矩阵（Notepad / Chrome / Firefox / VS Code 等）待用户在真实桌面补测，写入 M0 报告第 6 节。
-- CI 文件已提交，GitHub Actions 尚未实跑。
+- GitHub Actions 尚未实跑（CI 与 release 工作流已提交，版本同步脚本本地实跑通过）。
 
 ## 接下来
 
-1. 进入 [PLAN_M5.md](PLAN_M5.md)：视觉与文案收尾、许可证清单、README 与脚本文档、性能复测、`.xpi` 发布流程。
-2. M4 已把 `/v1/sense` 从占位接成真实 `SenseResolution`，扩展无需改端点；M5 只需文案与发布调整。若 M5 决定让扩展采用 AI 释义，需要新增桥接字段与扩展交互。
+1. 执行上面的 M5 发布门禁：8 小时长跑 → 干净 VM 验收 → 打 tag 发布。
+2. 发布后把长跑数据、安装包与 `.xpi` 的 SHA256、release 链接补进 PROGRESS 与 [performance](../../docs/performance.md)。
+3. M4 已把 `/v1/sense` 接成真实 `SenseResolution`；若后续让扩展采用 AI 释义，需要新增桥接字段与扩展交互。
 
-## 代码影响检查（M4 已落地，M5 关注）
+## 代码影响检查（M5 已落地）
 
-- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 成为状态中心；M3 加 `lookup_collect_all` 与语境环形缓存；M4 加 `events`、`sense/`，`QueryRouter` 改为 `lookup_planned`（同步结果 + 远程任务计划），`state` 接入 `CacheStore`、远程任务执行与语境解析。M5 主要是文案与视觉，不改这些契约。
-- `src-tauri/src/bridge/`：M3 新增；M4 让 `/v1/selection` 后台解析语境并写入 `/v1/sense` 响应，鉴权与路由未变。
-- `src-tauri/src/db/`：M2 `saved_cards`；M4 加 `lookup_cache`/`sense_cache`（同一 `cache.db`，`user_version=2`）。
-- `src-tauri/src/anki/`：M2 导出；M4 支持 `AnkiPayload.tags`（AI 卡 `ai-generated`）与 `AI · <model>` 来源。
-- `src-tauri/src/commands.rs`、`lib.rs`：M4 加缓存/语境命令；M5 若加新命令需同步 `src/lib/ipc.ts` 与 BACKEND_STRUCTURE。
-- `src/lib/{types,ipc,events}.ts`：M4 增远程源 union、`CacheStats`、`TestResult.raw_preview/error`、`AnkiPayload.tags`、`SenseResolution.candidates`、`lookup.sentence`。
-- `src/windows/{popup,manager,settings}`：M4 完成远程源编辑/测试、缓存与语境设置、弹窗推荐/AI/远程状态；M5 只做视觉与文案。
-- `extension/`：M3 完整工程；M4 未改代码（桥接兼容），M5 调整 options 文案与发布流程。
-- `src-tauri/tauri.conf.json`/`capabilities/default.json`：M4 未新增 Tauri 权限。
+- `src-tauri/src/core/`：M1 `entry/config/error/html/registry/query_router/runtime`；M2 加 `resources`，`state` 成为状态中心；M3 加 `lookup_collect_all` 与语境环形缓存；M4 加 `events`、`sense/` 与 `CacheStore`；M5 只改错误文案（请求失败用 `reqwest::Error::without_url()` 去 URL），契约未变。
+- `src-tauri/src/bridge/`：M3 新增；M4 让 `/v1/selection` 后台解析语境；M5 未改鉴权与路由。
+- `src-tauri/src/db/`：M2 `saved_cards`；M4 加 `lookup_cache`/`sense_cache`（同一 `cache.db`，`user_version=2`）；M5 未改结构。
+- `src-tauri/src/anki/`：M2 导出；M4 支持 `AnkiPayload.tags`（AI 卡 `ai-generated`）与 `AI · <model>` 来源；M5 未改。
+- `src-tauri/src/commands.rs`、`lib.rs`：M4 加缓存/语境命令；M5 加 `open_log_dir`、`open_cache_dir`（与 `open_config_dir` 共用打开目录逻辑），并已同步 BACKEND_STRUCTURE 与 `src/lib/ipc.ts`。
+- `src/lib/{types,ipc,events}.ts`：M4 增远程源 union、`CacheStats`、`TestResult.raw_preview/error`、`AnkiPayload.tags`、`SenseResolution.candidates`、`lookup.sentence`；M5 加 `openLogDir`/`openCacheDir` 封装。
+- `src/windows/{popup,manager,settings}`：M4 完成远程源编辑/测试、缓存与语境设置、弹窗推荐/AI/远程状态；M5 补 About 构建信息与目录操作、aria/live region、错误文案，新增 `AboutSection.test.tsx`。
+- `extension/`：M3 完整工程；M4 未改代码；M5 统一 options 与气泡的 401/离线/令牌文案与 AI 标注，网络逻辑未变。
+- `.github/workflows/`：M5 重写 `ci.yml`（扩展、build、cargo deny、版本五处同步）并新增 `release.yml`（NSIS、`.xpi`、SHA256、草稿 release）。
+- `src-tauri/tauri.conf.json`/`capabilities/default.json`：M5 未新增 Tauri 权限。
 
 
 ## 已知问题与阻塞
@@ -109,6 +123,10 @@
 - **M4 性能偏差**：计划 T4.10 写“远程超时 ≤配置+200ms”，但契约要求超时最多重试 1 次 + 150ms 间隔，实测 300ms 配置为 762.5ms（≈2×+150）。实现优先契约；`local_first`/`aggregate` 远程在后台，不拖首屏，只有 `first_hit` 同步等待。详见 [M4-remote-baseline](../notes/M4-remote-baseline.md) §4。
 - **M4 已知限制**：弹窗推荐为“条目级徽标 + 义项切换列表”，不对整段词典 HTML 做子串高亮；扩展读取语境建议但不可采用 AI 释义；迟到的原句补写不会重新触发语境请求。详见 [M4-sense-baseline](../notes/M4-sense-baseline.md) §5。
 - **M4 依赖新增**：`jsonpath-rust =1.0.6`、`rquickjs 0.14.0`（`default-features=false`，关闭 rust-alloc 以保证 `set_memory_limit` 生效）。已写入 [TECH_STACK](../../docs/TECH_STACK.md)。
+- **M5 未执行的环境门禁**：8 小时长跑只做了 20 分钟冒烟（脚本已就绪）；干净 Windows 虚拟机验收、tag 发布与 GitHub Actions 实跑未做。原因：本次会话无真实 MDX/MDD 样本（`references/dict` 为空），且发布需要 push/tag。
+- **M5 性能未覆盖**：500MB 级词典内存、真实 LLM 端到端时延、桌面端 E2E 时延未在本次复测；[performance](../../docs/performance.md) 已标注“沿用 M2 证据”或“未验证”，没有把旧数据说成 M5 复测。
+- **M5 端口行为**：端口保存后桥接启动失败不会回滚配置，状态显示占用错误；用户改端口再保存即可。已同步 [APP_FLOW](../../docs/APP_FLOW.md) §7.3 与用户指南。
+- **M5 版本点**：`extension/wxt.config.ts` 的 `manifest.version` 是第五个版本点，CI/release 已纳入断言；改版本时五处一起改。
 
 ## 关键决策
 
@@ -140,3 +158,6 @@
 - M4 语境结果只在成功状态（selected/ambiguous/low_confidence）写 `sense_cache`；key 含 model 与 prompt version，拒绝把失败缓存成空结果。
 - M4 的 `AnkiPayload` 增加可选 `tags`：AI 卡由前端写 `AI · <model>` 与 `ai-generated`，后端只做标签合并与转义，不推断来源。
 - M4 的 `SenseResolution` 携带 `candidates` 快照，UI 才有义项切换与推荐依据；`Entry[]` 始终不被修改。
+- M5 统一许可证标识为 `AGPL-3.0-only`（`Cargo.toml`、两个 `package.json`、SPDX 头、README/计划），`deny.toml` 同时允许 `-or-later` 以兼容未来依赖。
+- M5 的长期性能证据用回环桥接驱动真实应用，不依赖 UI 点击；`%TEMP%` 不可写时 exe 回退到 `%LOCALAPPDATA%\Temp`，`LEXIGRAB_HOME` 配置固定在 `<home>/config/config.toml`。
+- M5 长跑与 100k bench 脚本放在 `.agents/automation/m5-soak/`，产物不入库；`docs/performance.md` 只写实测与明确的未覆盖项。

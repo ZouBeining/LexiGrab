@@ -4,7 +4,7 @@ title: 打磨、文档与发布
 depends_on: [M2, M3, M4]
 exit_gate: 仓库可作为 AGPL-3.0 项目发布，v0.1.0 安装包与 .xpi 可交付
 estimate: 10-14 人日
-status: planned
+status: done
 ---
 
 # M5 打磨与发布
