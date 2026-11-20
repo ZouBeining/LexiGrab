@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 本地查询路由集成测试：真实 MDX 夹具 + 多源排序 + 失败隔离。
 
 use std::path::{Path, PathBuf};

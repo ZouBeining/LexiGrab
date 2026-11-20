@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 
 /** 会被 Field 注入的控制属性。适用于 input / select / textarea。 */

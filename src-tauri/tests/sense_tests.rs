@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! T1.11 义项提取基础用例。
 
 use lexigrab_lib::core::entry::Entry;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! MDX 解析器与 worker 集成测试，使用提交的夹具。
 
 use std::path::{Path, PathBuf};

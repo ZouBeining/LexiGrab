@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::sync::Mutex;
 
 /// 查询 id，M1 由 CLI/测试生成；M2 由 IPC 命令生成。

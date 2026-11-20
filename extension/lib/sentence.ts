@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * 选区与原句提取（PLAN_M3 T3.3）。纯 DOM 逻辑，方便 happy-dom 单元测试。
  *

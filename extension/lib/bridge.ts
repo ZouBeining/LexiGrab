@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * 桌面端本地桥接客户端。契约见 docs/BACKEND_STRUCTURE.md §5。
  *

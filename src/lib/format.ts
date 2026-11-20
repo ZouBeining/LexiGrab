@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * 展示层格式化辅助。保持纯函数，便于单测与其他窗口复用。
  * 文案遵循 docs/FRONTEND_GUIDELINES.md §9：简短、不显示原始异常。

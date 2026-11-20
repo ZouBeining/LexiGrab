@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 开发 CLI：不依赖 Tauri 窗口，直接驱动 M1 核心链路。
 //!
 //! 退出码：0 成功；2 配置/源错误；3 Anki 错误；4 查询无结果。

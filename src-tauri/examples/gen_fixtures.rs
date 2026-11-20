@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 生成 M1 测试夹具。提交生成的二进制夹具；CI 不运行本生成器。
 //!
 //! 运行：`cargo run --example gen_fixtures`（工作目录 src-tauri）

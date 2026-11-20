@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 数据源抽象。契约见 docs/BACKEND_STRUCTURE.md 2.2 与 7.
 
 pub mod local_file;

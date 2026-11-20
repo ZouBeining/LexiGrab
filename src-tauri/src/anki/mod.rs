@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! AnkiConnect client, note field mapping and the export pipeline.
 //! Contract: docs/BACKEND_STRUCTURE.md §6.
 

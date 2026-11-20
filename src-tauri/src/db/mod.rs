@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! SQLite store for saved-card history, lookup cache and sense cache.
 //! Contract: docs/BACKEND_STRUCTURE.md §3.
 //!

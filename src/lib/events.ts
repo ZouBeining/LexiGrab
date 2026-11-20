@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * Tauri 事件名与载荷类型集中在此，与 docs/BACKEND_STRUCTURE.md §4.2 一致。
  * 组件不手写事件字符串，一律用 EVENTS 常量或 listen* 辅助函数。

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration tests for the saved-card SQLite store, context fingerprints and
 //! the Anki export pipeline. Contract: docs/BACKEND_STRUCTURE.md §3 and §6.
 

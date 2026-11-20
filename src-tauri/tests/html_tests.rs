@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! T1.5 HTML 清洗与资源改写的黄金用例。
 
 use lexigrab_lib::core::entry::ResourceRef;

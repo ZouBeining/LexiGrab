@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use serde::{Deserialize, Serialize};
 
 /// 选区捕获方式，与 src/lib/types.ts 的 CaptureMethod 对齐。

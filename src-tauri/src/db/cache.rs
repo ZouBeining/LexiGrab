@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! SQLite lookup cache and sense cache. Contract: docs/BACKEND_STRUCTURE.md §3.
 //!
 //! One `CacheStore` owns one connection to the shared `cache.db` (the same file

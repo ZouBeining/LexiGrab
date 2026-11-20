@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import type { RemoteLookupError } from "../../lib/events";
 import type { CachedSource } from "./state";
 

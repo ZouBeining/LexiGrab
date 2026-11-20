@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * background：唯一持有桥接令牌的内存路径。
  * content 只通过消息请求，页面脚本拿不到令牌，也不会把完整响应写进 console。

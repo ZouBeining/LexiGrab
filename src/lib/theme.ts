@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 export const THEMES = ["figma", "apple", "cursor"] as const;
 
 export type Theme = (typeof THEMES)[number];

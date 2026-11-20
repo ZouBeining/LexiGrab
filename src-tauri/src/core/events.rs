@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 运行时事件到 Tauri 事件的桥。契约见 docs/BACKEND_STRUCTURE.md §4.2。
 //!
 //! 查询在 blocking 线程里执行，`AppHandle` 可跨线程 clone，因此事件 sink 能

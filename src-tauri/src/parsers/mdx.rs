@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! MDX 解析器适配层：每个文件一个 worker 线程，外部只保留命令通道。
 //!
 //! 依赖 `mdictlib`（MIT）。原计划中的 libmdx git 依赖在当前网络不可达，

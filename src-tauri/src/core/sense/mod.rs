@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 语境辅助：JEV-like 义项选择器与 LLM 兜底。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §2.6、§7.4–§7.7：

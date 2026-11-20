@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! AnkiConnect 客户端与字段映射集成测试。
 //!
 //! reqwest 的阻塞客户端在构建与请求时都会同步等待内部运行时，因此客户端必须

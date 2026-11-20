@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! M3 本地 HTTP 桥接：只监听 `127.0.0.1`，供 Firefox 扩展查询与制卡。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §5，任务分解见 PLAN_M3 §4 T3.1。

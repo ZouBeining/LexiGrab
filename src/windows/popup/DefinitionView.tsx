@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useMemo, type MouseEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { toRenderableUri, type Platform } from "../../lib/resource";

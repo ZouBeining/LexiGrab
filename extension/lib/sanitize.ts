@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * 释义 HTML 的二次清洗。服务端已经用 ammonia 清洗过一次，扩展仍按
  * APP_FLOW §8.2 再做一次，因为响应可能来自旧版桌面端或被杀软改写。

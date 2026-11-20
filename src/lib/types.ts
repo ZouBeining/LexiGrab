@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * IPC DTO。字段与 docs/BACKEND_STRUCTURE.md 第 2、3、4 节保持一致；
  * 所有跨 IPC 字段使用 snake_case，对齐 Rust serde 输出。

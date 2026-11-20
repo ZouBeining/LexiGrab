@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useState } from "react";
 import { debugTriggerCapture, getCaptureStats, toIpcError } from "../../lib/ipc";
 import type { CaptureResult, CaptureStats, IpcError } from "../../lib/types";

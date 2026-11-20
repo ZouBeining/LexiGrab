@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration tests for the SQLite lookup/sense cache. Contract:
 //! docs/BACKEND_STRUCTURE.md §3 and PLAN_M4 T4.4.
 

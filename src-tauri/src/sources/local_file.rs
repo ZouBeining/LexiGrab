@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 本地 MDX 文件数据源：每个文件一个 worker，查询失败只影响该文件。
 
 use std::path::{Path, PathBuf};

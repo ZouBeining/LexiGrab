@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /** 页面元数据与浮层定位。 */
 
 export interface PageMeta {

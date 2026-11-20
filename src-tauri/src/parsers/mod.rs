@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 词典格式解析器。
 
 pub mod jsonpath;

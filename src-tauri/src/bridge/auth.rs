@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 桥接鉴权原语：常量时间令牌比较、Origin 前缀校验与令牌桶限流。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §5.3。这里不读取配置，调用方传入当前值，

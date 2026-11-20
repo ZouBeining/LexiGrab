@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 回环 HTTP 服务：路由、守卫中间件与阻塞边界。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §5。所有路由共用一个守卫中间件：

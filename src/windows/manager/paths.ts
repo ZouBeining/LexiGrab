@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /** Windows path helpers shared by the manager windows. */
 
 /** Last path segment; keeps Windows and POSIX separators working. */

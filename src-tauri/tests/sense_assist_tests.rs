@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 语境辅助：HTTP 客户端（wiremock）与状态机（fake 选择器/LLM）测试。
 //!
 //! HTTP 用例把阻塞客户端放进 `spawn_blocking`，与 `anki_tests.rs` 的做法一致；

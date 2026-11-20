@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Anki export pipeline: strip local dictionary media, sanitize, check the
 //! saved-card context and create the note. Contract:
 //! docs/BACKEND_STRUCTURE.md §6 and §3.

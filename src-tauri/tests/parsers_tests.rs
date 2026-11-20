@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! JSONPath 与 QuickJS 响应解析器测试：映射、错误分类、超时与 OOM。
 
 use std::path::{Path, PathBuf};

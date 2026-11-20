@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 远程响应解析器契约。契约见 docs/BACKEND_STRUCTURE.md 7.2 与 7.3。
 //!
 //! 解析器只把响应体映射为 `Entry`，不填 `source_name`、不读网络；数据源层负责

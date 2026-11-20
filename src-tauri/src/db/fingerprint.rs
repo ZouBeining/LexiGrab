@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Context fingerprints for the `saved_cards` duplicate-context check.
 //!
 //! A fingerprint is a UUID v5 over normalized text: NFKC, lowercase, collapse

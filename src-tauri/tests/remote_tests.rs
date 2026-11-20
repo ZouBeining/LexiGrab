@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 远程 HTTP 数据源集成测试：wiremock 覆盖状态码、超时、重定向、上限、鉴权与端到端解析。
 //!
 //! reqwest blocking 客户端会自带 tokio runtime，构造与查询都必须在 `std::thread` 中完成。

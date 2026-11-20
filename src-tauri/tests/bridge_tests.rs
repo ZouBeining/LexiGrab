@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 桥接 HTTP 契约测试：鉴权、Origin、CORS、请求体上限、限流、端点形状与错误映射。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §5。绝大多数用例走 `tower::ServiceExt::oneshot`，

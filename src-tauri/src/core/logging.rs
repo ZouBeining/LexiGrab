@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::path::Path;
 
 use tracing_appender::non_blocking::WorkerGuard;

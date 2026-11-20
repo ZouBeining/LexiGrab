@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Anki 字段映射。契约见 docs/BACKEND_STRUCTURE.md §2.4 与 §6。
 //!
 //! 只负责把 `AnkiPayload` 转换成 addNote 的字段形状；牌组、模板、标签均来自

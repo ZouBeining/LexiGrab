@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! M4 性能记录（默认忽略；`cargo test --test perf_tests -- --ignored --nocapture`）。
 //!
 //! 断言给出宽松上限，真实耗时打印出来写入 `.agents/notes/M4-remote-baseline.md`。

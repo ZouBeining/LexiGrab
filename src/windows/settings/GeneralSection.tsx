@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState } from "react";
 import { updateSettings, toIpcError } from "../../lib/ipc";
 import type {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * 扩展设置存储。只写 `browser.storage.local`（不用 sync）：
  * 令牌属于本机配对信息，不应该随 Firefox 账号同步到其他设备。

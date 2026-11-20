@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `mdx-res` protocol integration tests: exercise the M2 fixtures end to end,
 //! from request parsing down to the resolved resource bytes.
 

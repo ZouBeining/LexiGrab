@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 义项提取基础。契约见 docs/BACKEND_STRUCTURE.md 2.6 与 7.4。
 //!
 //! 只做结构化提取：解析 `Entry.definition_html`，按顶层列表项/段落拆成候选，

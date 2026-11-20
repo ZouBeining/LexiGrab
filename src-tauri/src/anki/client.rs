@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! AnkiConnect 阻塞客户端。契约见 docs/BACKEND_STRUCTURE.md §6。
 //!
 //! 固定 POST `endpoint`，请求体形如

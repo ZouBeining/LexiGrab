@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 数据源注册表：按 enabled、priority、id 稳定排序；reload 复用未变化的 worker。
 
 use std::path::Path;

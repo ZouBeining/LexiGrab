@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { SourceBadge } from "../../components/SourceBadge";
 import type { Entry, IpcError, TestResult } from "../../lib/types";
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! JSONPath 响应解析器。契约见 docs/BACKEND_STRUCTURE.md 7.2。
 //!
 //! 表达式命中对象数组（如 `$.entries[*]`）；命中数组会展开，非对象元素跳过。

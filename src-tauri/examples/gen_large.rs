@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 生成指定条目数的合成 MDX，用于 T1.10 性能基线。大文件不提交。
 //!
 //! 运行（建议 release）：

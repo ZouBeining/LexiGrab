@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 桥接 DTO 与请求校验。契约见 docs/BACKEND_STRUCTURE.md §5.2。
 //!
 //! 所有字段使用 snake_case。`SelectionRequest`/`AnkiRequest` 是外部输入，

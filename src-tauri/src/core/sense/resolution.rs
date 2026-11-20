@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 语境辅助状态机。契约见 docs/BACKEND_STRUCTURE.md §7.7。
 //!
 //! 顺序固定：

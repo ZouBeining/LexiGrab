@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `mdx-res` resource protocol request parsing and resource resolution.
 //!
 //! The renderer encodes local dictionary media as

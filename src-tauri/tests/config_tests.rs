@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 配置加载/保存集成测试：使用真实文件与工作区内的临时目录。
 
 use std::path::{Path, PathBuf};

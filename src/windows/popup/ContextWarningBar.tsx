@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { Button } from "../../components/Button";
 import type { CardContext } from "../../lib/types";
 

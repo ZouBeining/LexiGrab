@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 export interface SourceBadgeProps {
   /** 来源名；与 `source` 二选一，优先使用 `name`。 */
   name?: string;

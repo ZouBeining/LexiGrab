@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useState } from "react";
 import { getRuntimeStatus, getSettings, openWindow } from "../../lib/ipc";
 import type { RuntimeStatus, Settings } from "../../lib/types";

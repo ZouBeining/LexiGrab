@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! MDX HTML 清洗与资源改写。契约见 docs/BACKEND_STRUCTURE.md 2.1 与 7.1。
 //!
 //! 处理顺序：先用 lol_html 改写资源路径与链接，再用 ammonia 白名单清洗。

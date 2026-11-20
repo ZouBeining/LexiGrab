@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! QuickJS 脚本响应解析器。契约见 docs/BACKEND_STRUCTURE.md 7.3。
 //!
 //! 每次查询新建 Runtime/Context，限制时间、内存与栈；不注入任何宿主能力。

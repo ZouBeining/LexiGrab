@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Best-effort UIA sentence capture for the desktop popup.
 //!
 //! After the focused text is copied to the clipboard, the runtime may ask this

@@ -1,0 +1,74 @@
+# cargo-deny 配置（M5 T5.5）
+#
+# 位置：与 src-tauri/Cargo.toml 同目录。cargo-deny 会从 manifest 所在目录向上查找
+# deny.toml，因此在 src-tauri/ 下执行 `cargo deny check` 或使用
+# `--manifest-path src-tauri/Cargo.toml` 的 CI 都能命中本文件；无需 --config。
+#
+# 用法：cd src-tauri && cargo deny check licenses bans sources
+
+[graph]
+# 只检查实际构建会用到的平台。Windows 是唯一承诺平台；保留 Linux/macOS 目标，
+# 以便 CI 在 Ubuntu 上做平台无关检查时不误报。空列表表示不过滤。
+targets = []
+
+[licenses]
+# 允许的许可证。本项目自身与源文件 SPDX 头统一为 AGPL-3.0-only；保留
+# AGPL-3.0-or-later 以兼容未来依赖。其余为直接依赖与传递依赖中实际出现的许可：
+# MPL-2.0 来自 scraper 的 cssparser/selectors 与 option-ext；Unicode-3.0 来自
+# unicode-normalization/unicode-ident/icu_*；Zlib 来自 foldhash/zlib-rs；
+# Unlicense 来自 walkdir/same-file 等。
+allow = [
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "MPL-2.0",
+    "Unlicense",
+]
+
+# 许可证文本匹配的置信度阈值。0.8 是 cargo-deny 默认值；旧式表达式
+# （如 `MIT/Apache-2.0`）会以 OR 解析，仍按表达式逐项校验，不靠放宽此值通过。
+confidence-threshold = 0.8
+
+# AGPL-3.0-only 目前只出现在本项目源文件 SPDX 头里，registry 中没有依赖声明它；
+# 按计划保留在 allow 列表，同时不因“未遇到”产生 warning。
+unused-allowed-license = "allow"
+
+# 不针对单个 crate 开例外：任何新增依赖的许可证都必须显式加入上面的 allow 列表。
+exceptions = []
+
+# 工作区 crate（lexigrab，publish = false）也按 allow 列表检查，不做豁免。
+[licenses.private]
+ignore = false
+
+[bans]
+# 禁止通配版本（`*` / 无版本约束），要求所有依赖声明具体版本。
+wildcards = "deny"
+# 同一 crate 多版本在 Tauri 依赖图中常见（如 windows-sys、html5ever、toml_edit）；
+# 不阻断、也不告警刷屏，版本升级时用 `cargo tree -d` 人工评估。
+multiple-versions = "allow"
+# 不额外 deny 特定 crate。
+deny = []
+# 不跳过任何 crate 的重复版本检测。
+skip = []
+skip-tree = []
+
+# Git 源由 [sources] 统一拒绝，见下。
+[sources]
+# 只允许 crates.io。
+unknown-registry = "deny"
+# 当前没有任何 git 依赖，全部拒绝。
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# 计划中的 libmdx（git rev）已不可达，实际使用 crates.io 的 mdictlib 0.2.8（MIT）。
+# 若将来恢复 libmdx，只允许 https://github.com/ZouBeining/* 下的具体 fork rev，
+# 例如 allow-git = ["https://github.com/ZouBeining/libmdx"]；不得使用通配符或放宽
+# unknown-git。当前保持为空。
+allow-git = []

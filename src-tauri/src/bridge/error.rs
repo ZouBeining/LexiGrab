@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 桥接错误：HTTP 状态码、稳定错误码与 JSON 响应体。
 //!
 //! 契约见 docs/BACKEND_STRUCTURE.md §5.3。错误响应体固定为
