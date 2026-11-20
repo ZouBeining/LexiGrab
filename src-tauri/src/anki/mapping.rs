@@ -73,8 +73,20 @@ pub fn build_note_request(
         deck: settings.deck.clone(),
         model: settings.model.clone(),
         fields: build_fields(settings, payload),
-        tags: settings.tags.clone(),
+        tags: merged_tags(settings, payload),
     })
+}
+
+/// 配置标签在前，payload 追加标签（如 `ai-generated`）在后并去重。
+fn merged_tags(settings: &AnkiSettings, payload: &AnkiPayload) -> Vec<String> {
+    let mut tags = settings.tags.clone();
+    for tag in &payload.tags {
+        let tag = tag.trim();
+        if !tag.is_empty() && !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
+        }
+    }
+    tags
 }
 
 /// HTML 转义 `& < > " '`，用于 word/sentence/source 等纯文本字段。

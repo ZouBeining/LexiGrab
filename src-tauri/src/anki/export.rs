@@ -102,6 +102,7 @@ pub fn export_to_anki(
         definition_html,
         sentence: payload.sentence.clone(),
         source: payload.source.clone(),
+        tags: payload.tags.clone(),
     };
 
     let exact_context_seen = match deps.settings.duplicate_policy {

@@ -108,6 +108,7 @@ impl AnkiRequest {
             definition_html: self.definition_html,
             sentence: truncate_chars(self.sentence, MAX_SENTENCE_CHARS),
             source: self.source.trim().to_string(),
+            tags: Vec::new(),
         })
     }
 }

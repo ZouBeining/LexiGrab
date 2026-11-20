@@ -89,6 +89,9 @@ pub struct AnkiPayload {
     pub definition_html: String,
     pub sentence: Option<String>,
     pub source: String,
+    /// 追加标签；AI 释义卡带 `ai-generated`，缺省为空。
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 impl AnkiPayload {
@@ -103,7 +106,14 @@ impl AnkiPayload {
             definition_html: definition_html.into(),
             sentence,
             source: source.into(),
+            tags: Vec::new(),
         }
+    }
+
+    /// 追加标签（AI 卡用），保持调用方顺序。
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
+        self
     }
 }
 
