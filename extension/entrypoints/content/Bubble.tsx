@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AnkiPayload,
@@ -46,9 +47,12 @@ const SENSE_INTERVAL_MS = 1000;
 const SENSE_MAX_ATTEMPTS = 5;
 
 const ERROR_COPY: Record<string, { title: string; action: string }> = {
-  NOT_CONFIGURED: { title: "还没有配对", action: "打开扩展设置，填入桌面端的端口与令牌。" },
-  DESKTOP_OFFLINE: { title: "桌面端未连接", action: "启动 LexiGrab，并在设置里确认桥接已启用。" },
-  AUTH_FAILED: { title: "令牌错误", action: "从桌面端设置重新复制令牌并保存。" },
+  NOT_CONFIGURED: { title: "还没有配对", action: "打开扩展设置，填入桌面端的端口与令牌后测试连接。" },
+  DESKTOP_OFFLINE: { title: "桌面端未连接", action: "启动 LexiGrab，并在桌面端设置里确认桥接已启用。" },
+  AUTH_FAILED: {
+    title: "令牌错误",
+    action: "从桌面端“设置 → 浏览器扩展”重新复制令牌，再点“测试连接”。",
+  },
   ORIGIN_REJECTED: { title: "来源被拒绝", action: "请使用 Firefox 加载本扩展后再试。" },
   TIMEOUT: { title: "请求超时", action: "重试一次；词典可能正在加载。" },
   SERVER_ERROR: { title: "桌面端处理失败", action: "稍后重试，或查看桌面端日志。" },
@@ -325,7 +329,7 @@ export function Bubble({ snapshot, position, send, onClose }: BubbleProps) {
                 {aiDefinition ? (
                   <div className="mt-1">
                     <p className="text-[11px] font-medium">
-                      AI 释义 · {aiDefinition.model}
+                      AI 生成 · {aiDefinition.model} · 可能不准确
                     </p>
                     <p className="mt-1 text-[13px] leading-relaxed">{aiDefinition.definition_text}</p>
                   </div>

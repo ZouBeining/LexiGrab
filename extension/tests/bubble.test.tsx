@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Bubble, type BubbleSnapshot } from "../entrypoints/content/Bubble";
@@ -223,7 +224,7 @@ describe("Bubble", () => {
       await Promise.resolve();
     });
     const text = screen.getByRole("dialog").textContent ?? "";
-    expect(text).toContain("AI 释义 · llama-local");
+    expect(text).toContain("AI 生成 · llama-local · 可能不准确");
     expect(text).toContain("the faculty of making happy discoveries");
     expect(senseAttempts).toBe(2);
   });

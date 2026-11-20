@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState } from "react";
 import { BridgeError, createBridgeClient, type HealthResult } from "../../lib/bridge";
 import {
@@ -14,18 +15,18 @@ function failureMessage(cause: unknown): string {
   if (cause instanceof BridgeError) {
     switch (cause.code) {
       case "AUTH_FAILED":
-        return "令牌错误：请从桌面端“浏览器扩展”分区重新复制令牌。";
+        return "令牌错误：从桌面端“设置 → 浏览器扩展”重新复制令牌，再点“测试连接”。";
       case "DESKTOP_OFFLINE":
-        return "连接失败：请确认 LexiGrab 桌面端已启动并启用了本地桥接。";
+        return "桌面端未连接：启动 LexiGrab，并在桌面端设置里确认桥接已启用。";
       case "TIMEOUT":
-        return "连接超时：桌面端可能在加载词典，请稍后重试。";
+        return "请求超时：重试一次；桌面端可能正在加载词典。";
       case "NOT_CONFIGURED":
-        return "请先填写端口与令牌。";
+        return "还没有配对：填入桌面端的端口与令牌后重试。";
       default:
-        return `${cause.message}（${cause.code}）`;
+        return `${cause.message}（错误码：${cause.code}）`;
     }
   }
-  return "连接失败：未知错误。";
+  return "连接失败：未知错误，请重新测试连接。";
 }
 
 /**
@@ -182,7 +183,7 @@ export function App() {
               </span>
             ) : (
               <span id="token-hint" className="text-xs text-ink-muted">
-                桌面端生成的 64 位十六进制令牌；令牌轮换后需要重新填写。
+                桌面端生成的 64 位十六进制令牌；令牌轮换后旧令牌立即失效，需要重新填写并测试连接。
               </span>
             )}
           </label>
