@@ -7,6 +7,7 @@ pub mod query_router;
 pub mod registry;
 pub mod resources;
 pub mod runtime;
+pub mod sense;
 pub mod shortcut;
 pub mod state;
 pub mod window;
