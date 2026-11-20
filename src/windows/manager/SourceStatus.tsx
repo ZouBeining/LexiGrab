@@ -5,6 +5,8 @@ interface SourceStatusBadgeProps {
   enabled: boolean;
   /** Runtime status when the source was returned by `get_source_statuses`. */
   status: SourceStatus | null;
+  /** Remote sources have no index; show “ready / last failed” instead of entry counts. */
+  remote?: boolean;
   onRetry?: () => void;
 }
 
@@ -24,9 +26,10 @@ function Dot({ tone }: { tone: "muted" | "success" | "danger" | "loading" }) {
 
 /**
  * Source status badge: text plus a small dot so state never depends on color alone.
- * States follow docs/APP_FLOW.md §5.1: disabled / loading / ready / failed.
+ * States follow docs/APP_FLOW.md §5.1 and PLAN_M4 T4.6:
+ * disabled / loading / ready / failed; remote rows omit entry counts.
  */
-export function SourceStatusBadge({ enabled, status, onRetry }: SourceStatusBadgeProps) {
+export function SourceStatusBadge({ enabled, status, remote = false, onRetry }: SourceStatusBadgeProps) {
   if (!enabled) {
     return (
       <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
@@ -40,7 +43,7 @@ export function SourceStatusBadge({ enabled, status, onRetry }: SourceStatusBadg
     return (
       <span className="inline-flex items-center gap-2 text-xs text-ink-muted" role="status">
         <Dot tone="loading" />
-        <span>正在加载</span>
+        <span>{remote ? "正在连接" : "正在加载"}</span>
       </span>
     );
   }
@@ -49,7 +52,7 @@ export function SourceStatusBadge({ enabled, status, onRetry }: SourceStatusBadg
     return (
       <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
         <Dot tone="success" />
-        <span>{status.entry_count} 条目</span>
+        <span>{remote ? "就绪" : `${status.entry_count} 条目`}</span>
       </span>
     );
   }
@@ -58,7 +61,8 @@ export function SourceStatusBadge({ enabled, status, onRetry }: SourceStatusBadg
     <span className="inline-flex min-w-0 items-center gap-2 text-xs text-danger">
       <Dot tone="danger" />
       <span className="max-w-[180px] truncate" title={status.message}>
-        加载失败：{status.message}
+        {remote ? "上次失败：" : "加载失败："}
+        {status.message}
       </span>
       {onRetry ? (
         <button

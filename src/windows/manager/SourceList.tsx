@@ -23,6 +23,21 @@ function sortByPriority(sources: SourceConfig[]): SourceConfig[] {
   return [...sources].sort((left, right) => left.priority - right.priority);
 }
 
+/** Row summary: local paths or the remote template + parser, capped for one line. */
+function describeSource(source: SourceConfig): { text: string; title: string } {
+  if (source.type === "remote_http") {
+    const parser = source.response_parser.mode === "jsonpath" ? "JSONPath" : "脚本";
+    return {
+      text: `远程 API · ${parser} · ${source.url_template}`,
+      title: source.url_template,
+    };
+  }
+  return {
+    text: source.paths.length > 0 ? summarisePaths(source.paths) : "未选择文件",
+    title: source.paths.join("\n"),
+  };
+}
+
 function IconChevron({ direction }: { direction: "up" | "down" }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4" fill="none">
@@ -68,6 +83,8 @@ function SourceRow({
     "flex size-8 items-center justify-center rounded-full text-ink-muted transition-colors duration-150 " +
     "hover:bg-canvas-soft hover:text-ink disabled:pointer-events-none disabled:opacity-48";
 
+  const summary = describeSource(source);
+
   return (
     <li className="flex min-h-16 items-center gap-3 border-b border-hairline px-1 py-2 last:border-b-0">
       <div className="min-w-0 flex-1">
@@ -78,9 +95,14 @@ function SourceRow({
           <span className="shrink-0 font-mono text-[11px] tracking-[0.6px] text-ink-muted">
             P{source.priority}
           </span>
+          {source.type === "remote_http" ? (
+            <span className="shrink-0 rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] tracking-[0.6px] text-ink-muted">
+              远程
+            </span>
+          ) : null}
         </div>
-        <p className="mt-0.5 truncate text-xs text-ink-muted" title={source.paths.join("\n")}>
-          {source.paths.length > 0 ? summarisePaths(source.paths) : "未选择文件"}
+        <p className="mt-0.5 truncate text-xs text-ink-muted" title={summary.title}>
+          {summary.text}
         </p>
       </div>
 
@@ -88,6 +110,7 @@ function SourceRow({
         <SourceStatusBadge
           enabled={source.enabled}
           status={status?.status ?? null}
+          remote={source.type === "remote_http"}
           {...(status?.status.status === "failed" ? { onRetry } : {})}
         />
       </div>
@@ -399,7 +422,7 @@ export function SourceList({ forceGuide, onGuideClosed }: SourceListProps) {
             词典源
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            管理本地 .mdx 词典；列表按优先级升序，启停与排序会立即保存。
+            管理本地 .mdx 词典与远程 API 源；列表按优先级升序，启停与排序会立即保存。
           </p>
         </div>
         <Button onClick={() => setDialog({ mode: "add" })}>添加源</Button>
@@ -454,9 +477,9 @@ export function SourceList({ forceGuide, onGuideClosed }: SourceListProps) {
         ) : ordered.length === 0 ? (
           <EmptyState
             tone={showGuide ? "plain" : "block"}
-            title="还没有词典源"
-            description="添加本地 .mdx 词典后即可查询。词典只读取文件，不会修改或删除原文件。"
-            action={<Button onClick={() => setDialog({ mode: "add" })}>添加词典</Button>}
+            title="还没有数据源"
+            description="添加本地 .mdx 词典或远程 API 源后即可查询。本地词典只读取文件，不会修改或删除原文件。"
+            action={<Button onClick={() => setDialog({ mode: "add" })}>添加数据源</Button>}
           />
         ) : (
           <div>
@@ -515,10 +538,12 @@ export function SourceList({ forceGuide, onGuideClosed }: SourceListProps) {
       {deleteTarget ? (
         <Modal labelledBy="delete-source-title" onClose={() => setDeleteTarget(null)}>
           <h2 id="delete-source-title" className="text-[16px] font-medium">
-            删除词典源？
+            删除数据源？
           </h2>
           <p className="mt-2 text-sm text-ink-muted">
-            将移除「{deleteTarget.name}」的配置。磁盘上的词典文件不会被删除。
+            {deleteTarget.type === "remote_http"
+              ? `将移除远程源「${deleteTarget.name}」的配置，不会影响该服务端。`
+              : `将移除「${deleteTarget.name}」的配置。磁盘上的词典文件不会被删除。`}
           </p>
           {deleteError ? (
             <p role="alert" className="mt-3 text-sm text-danger">

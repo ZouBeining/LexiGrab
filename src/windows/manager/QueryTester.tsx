@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { listSources, testSourceQuery, toIpcError } from "../../lib/ipc";
-import type { Entry, IpcError, SourceConfig, TestResult } from "../../lib/types";
+import type { IpcError, SourceConfig, TestResult } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { SourceBadge } from "../../components/SourceBadge";
 import { Spinner } from "../../components/Spinner";
+import { TestResultView } from "./TestResultView";
 
 interface SourceQueryResult {
   source: SourceConfig;
@@ -12,11 +12,15 @@ interface SourceQueryResult {
   error: IpcError | null;
 }
 
-/** Converts sanitized definition HTML to short plain text for the test view. */
-function plainText(html: string): string {
-  const parsed = new DOMParser().parseFromString(html, "text/html");
-  const text = (parsed.body.textContent ?? "").replace(/\s+/g, " ").trim();
-  return text.length > 320 ? `${text.slice(0, 320)}…` : text;
+interface FailureInfo {
+  code: string;
+  message: string;
+}
+
+/** A remote source reports failures in `result.error`; local failures reject. */
+function groupFailure(group: SourceQueryResult): FailureInfo | null {
+  if (group.error) return group.error;
+  return group.result?.error ?? null;
 }
 
 function suggestionFor(code: string): string {
@@ -32,38 +36,17 @@ function suggestionFor(code: string): string {
     case "QUERY_EMPTY":
       return "请输入要查询的词。";
     default:
+      if (code.startsWith("REMOTE") || code.startsWith("SCRIPT")) {
+        return "检查 URL 模板、鉴权头与解析配置；原始响应预览可帮助定位格式问题。";
+      }
       return "稍后重试；如果持续失败，打开运行状态页查看日志目录。";
   }
 }
 
-interface EntryRowProps {
-  entry: Entry;
-  elapsedMs: number;
-}
-
-function EntryRow({ entry, elapsedMs }: EntryRowProps) {
-  return (
-    <li className="flex flex-col gap-1 border-b border-hairline py-3 last:border-b-0">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-sm font-medium">{entry.headword}</span>
-        {entry.phonetic ? (
-          <span className="font-mono text-[11px] tracking-[0.6px] text-ink-muted">
-            {entry.phonetic}
-          </span>
-        ) : null}
-        <SourceBadge name={entry.source_name} />
-        <span className="ml-auto font-mono text-[11px] tracking-[0.6px] text-ink-muted">
-          {Math.round(elapsedMs)} ms
-        </span>
-      </div>
-      <p className="text-sm leading-6 text-ink-muted">{plainText(entry.definition_html)}</p>
-    </li>
-  );
-}
-
 /**
- * Query tester (docs/APP_FLOW.md §5.4). Uses draft source configs through
- * `test_source_query`: no cache writes, no popup, no Anki export.
+ * Query tester (docs/APP_FLOW.md §5.4, PLAN_M4 T4.6). Uses draft source configs
+ * through `test_source_query`: no cache writes, no popup, no Anki export.
+ * Remote groups show elapsed time, readable errors and a raw response preview.
  */
 export function QueryTester() {
   const [sources, setSources] = useState<SourceConfig[] | null>(null);
@@ -150,7 +133,14 @@ export function QueryTester() {
   const entries = groups
     ? groups.flatMap((group) => (group.result ? group.result.entries : []))
     : [];
-  const failedGroups = groups?.filter((group) => group.error !== null) ?? [];
+  const failedGroups = groups?.filter((group) => groupFailure(group) !== null) ?? [];
+  const groupsWithOutput =
+    groups?.filter(
+      (group) =>
+        (group.result?.entries.length ?? 0) > 0 ||
+        group.result?.raw_preview !== null ||
+        groupFailure(group) !== null,
+    ) ?? [];
   const maxElapsed =
     groups && groups.length > 0
       ? Math.max(...groups.map((group) => group.result?.elapsed_ms ?? 0))
@@ -177,8 +167,8 @@ export function QueryTester() {
     if (enabledSources.length === 0) {
       return (
         <EmptyState
-          title="没有启用的词典源"
-          description="先在「词典源」页添加或启用本地 .mdx 词典，然后回到这里测试查询。"
+          title="没有启用的数据源"
+          description="先在「词典源」页添加或启用本地词典或远程 API，然后回到这里测试查询。"
         />
       );
     }
@@ -221,6 +211,7 @@ export function QueryTester() {
               {enabledSources.map((source) => (
                 <option key={source.id} value={source.id}>
                   {source.name}
+                  {source.type === "remote_http" ? "（远程）" : ""}
                 </option>
               ))}
             </select>
@@ -272,35 +263,12 @@ export function QueryTester() {
 
       {running ? (
         <div className="flex items-center gap-2 border-y border-hairline py-8">
-          <Spinner label="正在查询词典…" />
+          <Spinner label="正在查询数据源…" />
         </div>
       ) : null}
 
       {!running && groups !== null ? (
-        failedGroups.length === groups.length && groups.length > 0 ? (
-          <div role="alert" className="rounded-3xl border border-danger/40 px-6 py-8">
-            <p className="text-sm font-medium text-danger">查询失败</p>
-            {groups.map((group) => (
-              <div key={group.source.id} className="mt-2 text-sm">
-                <p className="text-ink-muted">
-                  {group.source.name}：
-                  {group.error ? group.error.message : "未知错误"}
-                  {group.error ? (
-                    <span className="ml-2 font-mono text-[11px] tracking-[0.6px] text-ink-muted">
-                      {group.error.code}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="mt-1 text-xs text-ink-muted">
-                  {suggestionFor(group.error?.code ?? "INTERNAL")}
-                </p>
-              </div>
-            ))}
-            <Button variant="secondary" size="sm" className="mt-4" onClick={() => void run()}>
-              重试
-            </Button>
-          </div>
-        ) : entries.length === 0 ? (
+        entries.length === 0 && groupsWithOutput.length === 0 ? (
           <EmptyState
             tone="block"
             title="没有查询到结果"
@@ -315,35 +283,26 @@ export function QueryTester() {
               <p className="text-xs text-ink-muted">
                 另有 {failedGroups.length} 个源失败：
                 {failedGroups
-                  .map((group) => `${group.source.name}（${group.error?.message ?? "未知错误"}）`)
+                  .map((group) => {
+                    const failure = groupFailure(group);
+                    return `${group.source.name}（${failure?.message ?? "未知错误"}）`;
+                  })
                   .join("；")}
               </p>
             ) : null}
-            {groups.map((group) =>
-              group.result && group.result.entries.length > 0 ? (
-                <section
-                  key={group.source.id}
-                  aria-label={`${group.source.name} 的查询结果`}
-                  className="rounded-3xl border border-hairline px-6 py-4"
-                >
-                  <div className="flex items-center justify-between border-b border-hairline pb-2">
-                    <SourceBadge name={group.result.source_name || group.source.name} />
-                    <span className="font-mono text-[11px] tracking-[0.6px] text-ink-muted">
-                      {group.result.entries.length} 条 · {Math.round(group.result.elapsed_ms)} ms
-                    </span>
-                  </div>
-                  <ul>
-                    {group.result.entries.map((entry, index) => (
-                      <EntryRow
-                        key={`${entry.headword}-${index}`}
-                        entry={entry}
-                        elapsedMs={group.result?.elapsed_ms ?? 0}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ) : null,
-            )}
+            {groupsWithOutput.map((group) => (
+              <TestResultView
+                key={group.source.id}
+                result={group.result}
+                error={group.error}
+                name={group.source.name}
+              />
+            ))}
+            {entries.length === 0 ? (
+              <Button variant="secondary" size="sm" className="self-start" onClick={() => void run()}>
+                重试
+              </Button>
+            ) : null}
           </div>
         )
       ) : null}
@@ -351,7 +310,7 @@ export function QueryTester() {
       {groups === null && !running && runError === null ? (
         <EmptyState
           title="输入词开始测试"
-          description="查询测试会直接读取本地词典，用来验证源配置是否可用。"
+          description="查询测试会按当前配置直接读取源，用来验证本地词典或远程 API 是否可用。"
         />
       ) : null}
     </section>
